@@ -1,0 +1,84 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#172033">
+<title>Mi GTD</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f3f5f9;color:#172033;margin:0;padding:20px}
+header{background:#172033;color:white;padding:22px;border-radius:14px}
+main{max-width:650px;margin:20px auto}
+section{background:white;padding:18px;border-radius:14px;margin-bottom:15px}
+form{display:flex;gap:8px}
+input{padding:12px;border:1px solid #ccc;border-radius:8px;min-width:0;flex:1}
+button{background:#3157d5;color:white;border:0;border-radius:8px;padding:12px;cursor:pointer}
+.task{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #eee}
+.task span{flex:1;overflow-wrap:anywhere}
+.delete{background:#b42318}
+small{color:#667085}
+</style>
+</head>
+<body>
+<header>
+<h1>Mi GTD</h1>
+<p>Tu sistema personal de organización</p>
+</header>
+<main>
+<section>
+<h2>Captura rápida</h2>
+<form id="form">
+<input id="title" placeholder="¿Qué tienes que hacer?" required>
+<button type="submit">Añadir</button>
+</form>
+</section>
+<section>
+<h2>Bandeja de entrada</h2>
+<div id="tasks"></div>
+</section>
+<section>
+<button id="export">Exportar copia de seguridad</button>
+</section>
+</main>
+<script>
+const key="miGTD";
+let tasks=JSON.parse(localStorage.getItem(key)||"[]");
+const title=document.getElementById("title");
+const list=document.getElementById("tasks");
+
+function save(){
+ localStorage.setItem(key,JSON.stringify(tasks));
+ render();
+}
+function render(){
+ list.innerHTML="";
+ tasks.forEach((task,index)=>{
+  const row=document.createElement("div");
+  row.className="task";
+  const text=document.createElement("span");
+  text.textContent=task;
+  const done=document.createElement("button");
+  done.className="delete";
+  done.textContent="Completar";
+  done.onclick=()=>{tasks.splice(index,1);save()};
+  row.append(text,done);
+  list.append(row);
+ });
+}
+document.getElementById("form").addEventListener("submit",e=>{
+ e.preventDefault();
+ const value=title.value.trim();
+ if(value){tasks.push(value);title.value="";save()}
+});
+document.getElementById("export").onclick=()=>{
+ const blob=new Blob([JSON.stringify(tasks,null,2)],{type:"application/json"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="mi-gtd-copia.json";
+ a.click();
+};
+render();
+</script>
+</body>
+</html>
