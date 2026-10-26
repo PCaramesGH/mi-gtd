@@ -43,11 +43,15 @@ form input{flex:1}
 label{font-size:13px;color:#475467}
 h2{font-size:19px}
 h3{font-size:16px}
+.agenda-controls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.agenda-controls select{width:auto;flex:1;min-width:140px}
+.date-editor{max-width:280px;margin-top:8px}
 @media(max-width:500px){
  body{padding:9px}
  section{padding:13px}
  form{flex-direction:column}
  form button{width:100%}
+ .agenda-controls button{flex:1}
 }
 </style>
 </head>
@@ -85,6 +89,8 @@ h3{font-size:16px}
 <div class="nav">
 <button data-view="inbox" class="active">Bandeja</button>
 <button data-view="actions">Próximas acciones</button>
+<button data-view="agenda">Agenda</button>
+<button data-view="history">Historial</button>
 <button data-view="projects">Proyectos</button>
 <button data-view="areas">Áreas</button>
 <button data-view="contexts">Contextos</button>
@@ -105,6 +111,34 @@ h3{font-size:16px}
 <section id="view-actions" class="hidden">
 <h2>Próximas acciones</h2>
 <div id="actionTasks"></div>
+</section>
+
+<section id="view-agenda" class="hidden">
+<h2>Agenda</h2>
+
+<div class="agenda-controls">
+<button id="agendaPrev" class="secondary">Anterior</button>
+<button id="agendaToday">Hoy</button>
+<button id="agendaNext" class="secondary">Siguiente</button>
+<select id="agendaMode">
+<option value="week">Vista semanal</option>
+<option value="month">Vista mensual</option>
+</select>
+</div>
+
+<h3 id="agendaLabel"></h3>
+
+<h3>Tareas atrasadas</h3>
+<div id="agendaOverdue"></div>
+
+<h3>Tareas del periodo</h3>
+<div id="agendaTasks"></div>
+</section>
+
+<section id="view-history" class="hidden">
+<h2>Historial de tareas completadas</h2>
+<p class="small">Consulta las tareas terminadas y corrige su fecha de finalización si es necesario.</p>
+<div id="historyTasks"></div>
 </section>
 
 <section id="view-someday" class="hidden">
@@ -172,6 +206,9 @@ let realtimeChannel = null;
 let loading = false;
 let currentView = 'inbox';
 
+let agendaMode = 'week';
+let agendaDate = new Date();
+
 function errorMessage(error) {
   $('message').textContent = error.message || String(error);
 }
@@ -181,7 +218,12 @@ function clearMessage() {
 }
 
 function escapeText(value) {
-  return String(value ?? '');
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 async function loadWorkspace() {
@@ -282,6 +324,8 @@ function renderAll() {
   renderProjects();
   renderAreas();
   renderContexts();
+  renderAgenda();
+  renderHistory();
 }
 
 function optionList(items, selected, placeholder) {
@@ -293,6 +337,31 @@ function optionList(items, selected, placeholder) {
   });
 
   return html;
+}
+
+/* Convierte una fecha YYYY-MM-DD sin aplicar desfase horario */
+function parseLocalDate(value) {
+  if (!value) return null;
+
+  const parts = String(value).substring(0, 10).split('-').map(Number);
+
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function localDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+function startOfDay(date) {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
 }
 
 function renderTasks(containerId, items) {
@@ -490,6 +559,204 @@ function renderTasks(containerId, items) {
   });
 }
 
+/* AGENDA */
+
+function renderAgenda() {
+  const overdueContainer = $('agendaOverdue');
+  const periodContainer = $('agendaTasks');
+
+  if (!overdueContainer || !periodContainer) return;
+
+  overdueContainer.innerHTML = '';
+  periodContainer.innerHTML = '';
+
+  const today = startOfDay(new Date());
+  let start, end;
+
+  if (agendaMode === 'week') {
+    start = startOfDay(agendaDate);
+
+    const weekday = (start.getDay() + 6) % 7;
+    start.setDate(start.getDate() - weekday);
+
+    end = new Date(start);
+    end.setDate(end.getDate() + 7);
+
+    const lastDay = new Date(end);
+    lastDay.setDate(lastDay.getDate() - 1);
+
+    $('agendaLabel').textContent =
+      'Semana del ' + start.toLocaleDateString('es-ES') +
+      ' al ' + lastDay.toLocaleDateString('es-ES');
+
+  } else {
+    start = new Date(
+      agendaDate.getFullYear(),
+      agendaDate.getMonth(),
+      1
+    );
+
+    end = new Date(
+      agendaDate.getFullYear(),
+      agendaDate.getMonth() + 1,
+      1
+    );
+
+    $('agendaLabel').textContent =
+      agendaDate.toLocaleDateString('es-ES', {
+        month: 'long',
+        year: 'numeric'
+      });
+  }
+
+  const activeTasks = tasks.filter(t =>
+    !['completed', 'archived'].includes(t.status)
+  );
+
+  const overdue = activeTasks.filter(t => {
+    const dueDate = parseLocalDate(t.due_at);
+    return dueDate && dueDate < today;
+  });
+
+  const inPeriod = activeTasks.filter(t => {
+    const dates = [t.available_from, t.due_at].filter(Boolean);
+
+    return dates.some(value => {
+      const date = parseLocalDate(value);
+      return date && date >= start && date < end;
+    });
+  });
+
+  function addAgendaItems(container, items) {
+    if (!items.length) {
+      container.textContent = 'No hay tareas en este apartado.';
+      return;
+    }
+
+    items.sort((a, b) => {
+      const dateA = a.available_from || a.due_at || '';
+      const dateB = b.available_from || b.due_at || '';
+      return dateA.localeCompare(dateB);
+    });
+
+    items.forEach(task => {
+      const row = document.createElement('div');
+      row.className = 'task';
+
+      const title = document.createElement('div');
+      title.className = 'task-title';
+      title.textContent = task.title;
+
+      const dates = document.createElement('div');
+      dates.className = 'task-meta';
+
+      const details = [];
+
+      if (task.available_from) {
+        const date = parseLocalDate(task.available_from);
+        details.push(
+          'Programada: ' + date.toLocaleDateString('es-ES')
+        );
+      }
+
+      if (task.due_at) {
+        const date = parseLocalDate(task.due_at);
+        details.push(
+          'Fecha límite: ' + date.toLocaleDateString('es-ES')
+        );
+      }
+
+      dates.textContent = details.join(' · ');
+
+      row.append(title, dates);
+      container.append(row);
+    });
+  }
+
+  addAgendaItems(overdueContainer, overdue);
+  addAgendaItems(periodContainer, inPeriod);
+}
+
+/* HISTORIAL */
+
+function renderHistory() {
+  const container = $('historyTasks');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  const completed = tasks
+    .filter(t => t.status === 'completed')
+    .sort((a, b) =>
+      (b.completed_at || '').localeCompare(a.completed_at || '')
+    );
+
+  if (!completed.length) {
+    container.textContent = 'Todavía no hay tareas completadas.';
+    return;
+  }
+
+  completed.forEach(task => {
+    const row = document.createElement('div');
+    row.className = 'task';
+
+    const title = document.createElement('div');
+    title.className = 'task-title';
+    title.textContent = task.title;
+
+    const date = document.createElement('input');
+    date.type = 'datetime-local';
+    date.className = 'date-editor';
+
+    if (task.completed_at) {
+      const completedDate = new Date(task.completed_at);
+      const offset = completedDate.getTimezoneOffset();
+      const localDate = new Date(
+        completedDate.getTime() - offset * 60000
+      );
+
+      date.value = localDate.toISOString().slice(0, 16);
+    }
+
+    const save = document.createElement('button');
+    save.textContent = 'Guardar fecha';
+    save.style.marginTop = '8px';
+
+    save.onclick = async () => {
+      if (!date.value) {
+        alert('Selecciona una fecha de finalización.');
+        return;
+      }
+
+      save.disabled = true;
+
+      const completedAt = new Date(date.value).toISOString();
+
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          completed_at: completedAt,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', task.id)
+        .eq('workspace_id', workspaceId);
+
+      save.disabled = false;
+
+      if (error) {
+        errorMessage(error);
+        return;
+      }
+
+      clearMessage();
+      await loadAll();
+    };
+
+    row.append(title, date, save);
+    container.append(row);
+  });
+}
+
 function renderProjects() {
   const container = $('projectsList');
   container.innerHTML = '';
@@ -582,7 +849,7 @@ function renderContexts() {
   if (!contexts.length) container.textContent = 'Todavía no tienes contextos.';
 }
 
-function startRealtime(){
+function startRealtime() {
   stopRealtime();
 
   realtimeChannel = supabase
@@ -617,9 +884,15 @@ function startRealtime(){
     }, () => loadAll())
 
     .subscribe((status) => {
+      $('syncStatus').textContent =
+        status === 'SUBSCRIBED'
+          ? 'Sincronización: conectada'
+          : 'Sincronización: ' + status;
+
       console.log('Realtime:', status);
     });
 }
+
 function stopRealtime() {
   if (realtimeChannel) {
     supabase.removeChannel(realtimeChannel);
@@ -648,6 +921,8 @@ async function startApp(user) {
   }
 }
 
+/* INICIO DE SESIÓN */
+
 $('loginForm').addEventListener('submit', async e => {
   e.preventDefault();
   $('message').textContent = 'Conectando...';
@@ -664,6 +939,8 @@ $('loginForm').addEventListener('submit', async e => {
 
   await startApp(data.user);
 });
+
+/* CAPTURA */
 
 $('captureForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -690,6 +967,8 @@ $('captureForm').addEventListener('submit', async e => {
   await loadAll();
 });
 
+/* CREAR PROYECTOS */
+
 $('projectForm').addEventListener('submit', async e => {
   e.preventDefault();
 
@@ -713,6 +992,8 @@ $('projectForm').addEventListener('submit', async e => {
   await loadAll();
 });
 
+/* CREAR ÁREAS */
+
 $('areaForm').addEventListener('submit', async e => {
   e.preventDefault();
 
@@ -734,6 +1015,8 @@ $('areaForm').addEventListener('submit', async e => {
   $('areaName').value = '';
   await loadAll();
 });
+
+/* CREAR CONTEXTOS */
 
 $('contextForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -757,6 +1040,8 @@ $('contextForm').addEventListener('submit', async e => {
   await loadAll();
 });
 
+/* NAVEGACIÓN */
+
 document.querySelectorAll('[data-view]').forEach(button => {
   button.addEventListener('click', () => {
     currentView = button.dataset.view;
@@ -765,14 +1050,63 @@ document.querySelectorAll('[data-view]').forEach(button => {
       b.classList.toggle('active', b === button)
     );
 
-    ['inbox','actions','projects','areas','contexts','someday','reference']
-      .forEach(view => {
-        $('view-' + view).classList.toggle(
-          'hidden', view !== currentView
-        );
-      });
+    [
+      'inbox',
+      'actions',
+      'agenda',
+      'history',
+      'projects',
+      'areas',
+      'contexts',
+      'someday',
+      'reference'
+    ].forEach(view => {
+      $('view-' + view).classList.toggle(
+        'hidden',
+        view !== currentView
+      );
+    });
+
+    if (currentView === 'agenda') renderAgenda();
+    if (currentView === 'history') renderHistory();
   });
 });
+
+/* CONTROLES DE AGENDA */
+
+$('agendaMode').addEventListener('change', e => {
+  agendaMode = e.target.value;
+  renderAgenda();
+});
+
+$('agendaPrev').addEventListener('click', () => {
+  if (agendaMode === 'week') {
+    agendaDate.setDate(agendaDate.getDate() - 7);
+  } else {
+    agendaDate.setDate(1);
+    agendaDate.setMonth(agendaDate.getMonth() - 1);
+  }
+
+  renderAgenda();
+});
+
+$('agendaNext').addEventListener('click', () => {
+  if (agendaMode === 'week') {
+    agendaDate.setDate(agendaDate.getDate() + 7);
+  } else {
+    agendaDate.setDate(1);
+    agendaDate.setMonth(agendaDate.getMonth() + 1);
+  }
+
+  renderAgenda();
+});
+
+$('agendaToday').addEventListener('click', () => {
+  agendaDate = new Date();
+  renderAgenda();
+});
+
+/* CERRAR SESIÓN */
 
 $('logout').onclick = async () => {
   stopRealtime();
@@ -796,6 +1130,8 @@ $('logout').onclick = async () => {
   clearMessage();
 };
 
+/* EXPORTAR DATOS */
+
 $('export').onclick = () => {
   const backup = {
     exported_at: new Date().toISOString(),
@@ -812,11 +1148,15 @@ $('export').onclick = () => {
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
+
   a.href = url;
   a.download = 'mi-gtd-copia.json';
   a.click();
+
   URL.revokeObjectURL(url);
 };
+
+/* RECUPERAR SESIÓN */
 
 const { data: sessionData } = await supabase.auth.getSession();
 
@@ -827,6 +1167,7 @@ if (sessionData.session) {
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
     stopRealtime();
+
     currentUser = null;
     workspaceId = null;
     tasks = [];
