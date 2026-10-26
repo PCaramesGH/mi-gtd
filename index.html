@@ -23,6 +23,7 @@ button:disabled{opacity:.5;cursor:wait}
 #userbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 small{color:#667085}
 .hidden{display:none}
+#syncStatus{font-size:12px;margin-top:8px;color:#667085}
 </style>
 </head>
 <body>
@@ -50,6 +51,7 @@ small{color:#667085}
 <button id="logout" class="secondary">Cerrar sesión</button>
 </div>
 <small id="workspaceName"></small>
+<div id="syncStatus">Sincronización: conectando...</div>
 </section>
 
 <section>
@@ -86,10 +88,13 @@ const application = document.getElementById('application');
 const message = document.getElementById('message');
 const list = document.getElementById('tasks');
 const title = document.getElementById('title');
+const syncStatus = document.getElementById('syncStatus');
 
 let currentUser = null;
 let workspaceId = null;
 let tasks = [];
+let realtimeChannel = null;
+let loadingTasks = false;
 
 function showError(error) {
   message.textContent = error.message || String(error);
@@ -107,7 +112,6 @@ async function loadWorkspace() {
     throw new Error('Tu usuario no tiene ningún espacio de trabajo.');
   }
 
-  // De momento utilizamos el espacio personal.
   const membership = data.find(item => item.role === 'owner');
 
   if (!membership) {
@@ -129,17 +133,74 @@ async function loadWorkspace() {
 }
 
 async function loadTasks() {
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('id, title, status, created_at')
-    .eq('workspace_id', workspaceId)
-    .eq('status', 'inbox')
-    .order('created_at', { ascending: true });
+  if (!workspaceId || loadingTasks) return;
 
-  if (error) throw error;
+  loadingTasks = true;
 
-  tasks = data || [];
-  render();
+  try {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('id, title, status, created_at')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'inbox')
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    tasks = data || [];
+    render();
+
+  } catch (error) {
+    showError(error);
+  } finally {
+    loadingTasks = false;
+  }
+}
+
+// SINCRONIZACIÓN EN TIEMPO REAL
+function startRealtime() {
+  stopRealtime();
+
+  if (!workspaceId) return;
+
+  syncStatus.textContent = 'Sincronización: conectando...';
+
+  realtimeChannel = supabase
+    .channel('tasks-workspace-' + workspaceId)
+
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'tasks',
+        filter: 'workspace_id=eq.' + workspaceId
+      },
+      async () => {
+        // Cuando otro dispositivo modifica una tarea,
+        // volvemos a consultar la bandeja de entrada.
+        await loadTasks();
+      }
+    )
+
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        syncStatus.textContent = 'Sincronización: activa';
+      } else if (status === 'CHANNEL_ERROR') {
+        syncStatus.textContent = 'Sincronización: error de conexión';
+      } else if (status === 'TIMED_OUT') {
+        syncStatus.textContent = 'Sincronización: tiempo agotado';
+      } else if (status === 'CLOSED') {
+        syncStatus.textContent = 'Sincronización: desconectada';
+      }
+    });
+}
+
+function stopRealtime() {
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
 }
 
 function render() {
@@ -189,6 +250,8 @@ function render() {
 }
 
 async function startApp(user) {
+  stopRealtime();
+
   currentUser = user;
   message.textContent = '';
 
@@ -197,8 +260,12 @@ async function startApp(user) {
     await loadTasks();
 
     document.getElementById('userEmail').textContent = user.email;
+
     login.classList.add('hidden');
     application.classList.remove('hidden');
+
+    startRealtime();
+
   } catch (error) {
     showError(error);
     application.classList.add('hidden');
@@ -251,6 +318,8 @@ document.getElementById('form').addEventListener('submit', async e => {
 });
 
 document.getElementById('logout').onclick = async () => {
+  stopRealtime();
+
   const { error } = await supabase.auth.signOut();
 
   if (error) {
@@ -289,9 +358,12 @@ if (sessionData.session) {
 
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
+    stopRealtime();
+
     currentUser = null;
     workspaceId = null;
     tasks = [];
+
     application.classList.add('hidden');
     login.classList.remove('hidden');
   }
