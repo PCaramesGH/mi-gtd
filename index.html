@@ -6,26 +6,52 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#172033">
 <title>Mi GTD</title>
+
 <style>
-body{font-family:Arial,sans-serif;background:#f3f5f9;color:#172033;margin:0;padding:20px}
-header{background:#172033;color:white;padding:22px;border-radius:14px}
-main{max-width:650px;margin:20px auto}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#f3f5f9;color:#172033;margin:0;padding:15px}
+header{background:#172033;color:white;padding:20px;border-radius:14px}
+header h1{margin-top:0}
+main{max-width:950px;margin:20px auto}
 section{background:white;padding:18px;border-radius:14px;margin-bottom:15px}
-form{display:flex;gap:8px}
-input{padding:12px;border:1px solid #ccc;border-radius:8px;min-width:0;flex:1}
-button{background:#3157d5;color:white;border:0;border-radius:8px;padding:12px;cursor:pointer}
+input,select,textarea{padding:11px;border:1px solid #ccc;border-radius:8px;width:100%;min-width:0;font:inherit}
+textarea{min-height:65px;resize:vertical}
+button{background:#3157d5;color:white;border:0;border-radius:8px;padding:11px 14px;cursor:pointer}
 button:disabled{opacity:.5;cursor:wait}
-.task{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #eee}
-.task span{flex:1;overflow-wrap:anywhere}
-.delete{background:#16804a}
+form{display:flex;gap:8px;flex-wrap:wrap}
+form input{flex:1}
+.hidden{display:none!important}
 .secondary{background:#667085}
-#message{margin-top:12px;color:#b42318;overflow-wrap:anywhere}
-#userbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-small{color:#667085}
-.hidden{display:none}
-#syncStatus{font-size:12px;margin-top:8px;color:#667085}
+.green{background:#16804a}
+.red{background:#b42318}
+.task{border-bottom:1px solid #eee;padding:14px 0}
+.task-title{font-weight:bold;margin-bottom:8px;overflow-wrap:anywhere}
+.task-meta{font-size:12px;color:#667085;margin:6px 0}
+.task-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-top:10px}
+.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.task-actions button{font-size:13px}
+.nav{display:flex;gap:7px;flex-wrap:wrap;margin:15px 0}
+.nav button{background:#667085}
+.nav button.active{background:#3157d5}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #eee;padding:10px 0}
+.item span{overflow-wrap:anywhere}
+.small{font-size:12px;color:#667085}
+#message{color:#b42318;overflow-wrap:anywhere}
+#syncStatus{font-size:12px;color:#667085;margin-top:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.field{display:flex;flex-direction:column;gap:5px}
+label{font-size:13px;color:#475467}
+h2{font-size:19px}
+h3{font-size:16px}
+@media(max-width:500px){
+ body{padding:9px}
+ section{padding:13px}
+ form{flex-direction:column}
+ form button{width:100%}
+}
 </style>
 </head>
+
 <body>
 
 <header>
@@ -34,6 +60,7 @@ small{color:#667085}
 </header>
 
 <main>
+
 <section id="login">
 <h2>Iniciar sesión</h2>
 <form id="loginForm">
@@ -45,31 +72,82 @@ small{color:#667085}
 </section>
 
 <div id="application" class="hidden">
+
 <section>
-<div id="userbar">
-<span id="userEmail"></span>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+<strong id="userEmail"></strong>
 <button id="logout" class="secondary">Cerrar sesión</button>
 </div>
-<small id="workspaceName"></small>
+<p class="small" id="workspaceName"></p>
 <div id="syncStatus">Sincronización: conectando...</div>
 </section>
 
-<section>
-<h2>Captura rápida</h2>
-<form id="form">
-<input id="title" placeholder="¿Qué tienes que hacer?" required>
-<button type="submit">Añadir</button>
+<div class="nav">
+<button data-view="inbox" class="active">Bandeja</button>
+<button data-view="actions">Próximas acciones</button>
+<button data-view="projects">Proyectos</button>
+<button data-view="areas">Áreas</button>
+<button data-view="contexts">Contextos</button>
+<button data-view="someday">Algún día</button>
+<button data-view="reference">Referencias</button>
+</div>
+
+<section id="view-inbox">
+<h2>Bandeja de entrada</h2>
+<p class="small">Captura primero. Procesa cada elemento cuando tengas tiempo.</p>
+<form id="captureForm">
+<input id="captureTitle" placeholder="¿Qué tienes que hacer?" required>
+<button type="submit">Capturar</button>
 </form>
+<div id="inboxTasks"></div>
 </section>
 
-<section>
-<h2>Bandeja de entrada</h2>
-<div id="tasks"></div>
+<section id="view-actions" class="hidden">
+<h2>Próximas acciones</h2>
+<div id="actionTasks"></div>
+</section>
+
+<section id="view-someday" class="hidden">
+<h2>Algún día / Tal vez</h2>
+<div id="somedayTasks"></div>
+</section>
+
+<section id="view-reference" class="hidden">
+<h2>Material de referencia</h2>
+<div id="referenceTasks"></div>
+</section>
+
+<section id="view-projects" class="hidden">
+<h2>Proyectos</h2>
+<form id="projectForm">
+<input id="projectName" placeholder="Nombre del proyecto" required>
+<button type="submit">Crear proyecto</button>
+</form>
+<div id="projectsList"></div>
+</section>
+
+<section id="view-areas" class="hidden">
+<h2>Áreas de responsabilidad</h2>
+<form id="areaForm">
+<input id="areaName" placeholder="Nombre del área" required>
+<button type="submit">Crear área</button>
+</form>
+<div id="areasList"></div>
+</section>
+
+<section id="view-contexts" class="hidden">
+<h2>Contextos</h2>
+<form id="contextForm">
+<input id="contextName" placeholder="Ej. @casa, @ordenador, @teléfono" required>
+<button type="submit">Crear contexto</button>
+</form>
+<div id="contextsList"></div>
 </section>
 
 <section>
 <button id="export">Exportar copia de seguridad</button>
 </section>
+
 </div>
 </main>
 
@@ -77,27 +155,33 @@ small{color:#667085}
 import { createClient } from
 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-// CONFIGURACIÓN DE TU PROYECTO
 const SUPABASE_URL = 'https://ywdcbviwkxtpawktzksc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_vV683CF7NXaEz9yJ_TaUpw_aw33Jr-1';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const login = document.getElementById('login');
-const application = document.getElementById('application');
-const message = document.getElementById('message');
-const list = document.getElementById('tasks');
-const title = document.getElementById('title');
-const syncStatus = document.getElementById('syncStatus');
+const $ = id => document.getElementById(id);
 
 let currentUser = null;
 let workspaceId = null;
 let tasks = [];
+let projects = [];
+let areas = [];
+let contexts = [];
 let realtimeChannel = null;
-let loadingTasks = false;
+let loading = false;
+let currentView = 'inbox';
 
-function showError(error) {
-  message.textContent = error.message || String(error);
+function errorMessage(error) {
+  $('message').textContent = error.message || String(error);
+}
+
+function clearMessage() {
+  $('message').textContent = '';
+}
+
+function escapeText(value) {
+  return String(value ?? '');
 }
 
 async function loadWorkspace() {
@@ -108,11 +192,11 @@ async function loadWorkspace() {
 
   if (error) throw error;
 
-  if (!data || data.length === 0) {
+  if (!data?.length) {
     throw new Error('Tu usuario no tiene ningún espacio de trabajo.');
   }
 
-  const membership = data.find(item => item.role === 'owner');
+  const membership = data.find(x => x.role === 'owner');
 
   if (!membership) {
     throw new Error('No se ha encontrado tu espacio personal.');
@@ -128,70 +212,394 @@ async function loadWorkspace() {
 
   if (workspaceError) throw workspaceError;
 
-  document.getElementById('workspaceName').textContent =
-    'Espacio: ' + workspace.name;
+  $('workspaceName').textContent = 'Espacio: ' + workspace.name;
 }
 
-async function loadTasks() {
-  if (!workspaceId || loadingTasks) return;
+async function loadAll() {
+  if (!workspaceId || loading) return;
 
-  loadingTasks = true;
+  loading = true;
 
   try {
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('id, title, status, created_at')
-      .eq('workspace_id', workspaceId)
-      .eq('status', 'inbox')
-      .order('created_at', { ascending: true });
+    const results = await Promise.all([
+      supabase.from('tasks')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .order('created_at', { ascending: false }),
 
-    if (error) throw error;
+      supabase.from('projects')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .order('created_at', { ascending: false }),
 
-    tasks = data || [];
-    render();
+      supabase.from('areas')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .order('name'),
+
+      supabase.from('contexts')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .order('name')
+    ]);
+
+    for (const result of results) {
+      if (result.error) throw result.error;
+    }
+
+    tasks = results[0].data || [];
+    projects = results[1].data || [];
+    areas = results[2].data || [];
+    contexts = results[3].data || [];
+
+    renderAll();
 
   } catch (error) {
-    showError(error);
+    errorMessage(error);
   } finally {
-    loadingTasks = false;
+    loading = false;
   }
 }
 
-// SINCRONIZACIÓN EN TIEMPO REAL
+function renderAll() {
+  renderTasks('inboxTasks', tasks.filter(t =>
+    t.status === 'inbox'
+  ));
+
+  renderTasks('actionTasks', tasks.filter(t =>
+    t.kind === 'action' &&
+    ['active','scheduled','waiting'].includes(t.status)
+  ));
+
+  renderTasks('somedayTasks', tasks.filter(t =>
+    t.kind === 'someday_maybe' && t.status !== 'completed'
+  ));
+
+  renderTasks('referenceTasks', tasks.filter(t =>
+    t.kind === 'reference' && t.status !== 'completed'
+  ));
+
+  renderProjects();
+  renderAreas();
+  renderContexts();
+}
+
+function optionList(items, selected, placeholder) {
+  let html = `<option value="">${placeholder}</option>`;
+
+  items.forEach(item => {
+    const chosen = item.id === selected ? 'selected' : '';
+    html += `<option value="${item.id}" ${chosen}>${escapeText(item.name)}</option>`;
+  });
+
+  return html;
+}
+
+function renderTasks(containerId, items) {
+  const container = $(containerId);
+  container.innerHTML = '';
+
+  if (!items.length) {
+    container.textContent = 'No hay elementos en este apartado.';
+    return;
+  }
+
+  items.forEach(task => {
+    const row = document.createElement('div');
+    row.className = 'task';
+
+    const title = document.createElement('div');
+    title.className = 'task-title';
+    title.textContent = task.title;
+    row.append(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'task-meta';
+
+    const project = projects.find(p => p.id === task.project_id);
+    const area = areas.find(a => a.id === task.area_id);
+    const context = contexts.find(c => c.id === task.context_id);
+
+    meta.textContent = [
+      project ? 'Proyecto: ' + project.name : '',
+      area ? 'Área: ' + area.name : '',
+      context ? 'Contexto: ' + context.name : '',
+      task.status === 'waiting' ? 'En espera' : ''
+    ].filter(Boolean).join(' · ');
+
+    row.append(meta);
+
+    const editor = document.createElement('div');
+    editor.className = 'task-controls';
+
+    const kind = document.createElement('select');
+    kind.innerHTML = `
+      <option value="action">Próxima acción</option>
+      <option value="waiting_for">Pendiente de otra persona</option>
+      <option value="someday_maybe">Algún día / Tal vez</option>
+      <option value="reference">Referencia</option>
+    `;
+    kind.value = task.kind;
+
+    const projectSelect = document.createElement('select');
+    projectSelect.innerHTML = optionList(projects, task.project_id, 'Sin proyecto');
+
+    const areaSelect = document.createElement('select');
+    areaSelect.innerHTML = optionList(areas, task.area_id, 'Sin área');
+
+    const contextSelect = document.createElement('select');
+    contextSelect.innerHTML = optionList(contexts, task.context_id, 'Sin contexto');
+
+    const scheduled = document.createElement('input');
+    scheduled.type = 'date';
+    scheduled.title = 'Fecha programada';
+    scheduled.value = task.available_from
+      ? task.available_from.substring(0,10) : '';
+
+    const due = document.createElement('input');
+    due.type = 'date';
+    due.title = 'Fecha límite';
+    due.value = task.due_at ? task.due_at.substring(0,10) : '';
+
+    const waiting = document.createElement('input');
+    waiting.placeholder = '¿De quién dependes?';
+    waiting.value = task.waiting_for || '';
+
+    editor.append(
+      kind, projectSelect, areaSelect, contextSelect, scheduled, due
+    );
+
+    if (task.kind === 'waiting_for') {
+      editor.append(waiting);
+    }
+
+    row.append(editor);
+
+    const actions = document.createElement('div');
+    actions.className = 'task-actions';
+
+    const save = document.createElement('button');
+    save.textContent = 'Guardar cambios';
+
+    save.onclick = async () => {
+      save.disabled = true;
+
+      const newKind = kind.value;
+      let newStatus = task.status;
+
+      if (newKind === 'action') {
+        newStatus = scheduled.value ? 'scheduled' : 'active';
+      } else if (newKind === 'waiting_for') {
+        newStatus = 'waiting';
+      } else {
+        newStatus = 'active';
+      }
+
+      const updates = {
+        kind: newKind,
+        status: newStatus,
+        project_id: projectSelect.value || null,
+        area_id: areaSelect.value || null,
+        context_id: contextSelect.value || null,
+        available_from: scheduled.value
+          ? scheduled.value + 'T00:00:00' : null,
+        due_at: due.value
+          ? due.value + 'T00:00:00' : null,
+        waiting_for: newKind === 'waiting_for'
+          ? (waiting.value.trim() || null) : null,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('tasks')
+        .update(updates)
+        .eq('id', task.id)
+        .eq('workspace_id', workspaceId);
+
+      save.disabled = false;
+
+      if (error) {
+        errorMessage(error);
+        return;
+      }
+
+      clearMessage();
+      await loadAll();
+    };
+
+    actions.append(save);
+
+    if (task.status !== 'completed') {
+      const done = document.createElement('button');
+      done.className = 'green';
+      done.textContent = 'Completar';
+
+      done.onclick = async () => {
+        done.disabled = true;
+
+        const now = new Date().toISOString();
+
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            status: 'completed',
+            completed_at: now,
+            updated_at: now
+          })
+          .eq('id', task.id)
+          .eq('workspace_id', workspaceId);
+
+        if (error) {
+          errorMessage(error);
+          done.disabled = false;
+          return;
+        }
+
+        await loadAll();
+      };
+
+      actions.append(done);
+    }
+
+    const archive = document.createElement('button');
+    archive.className = 'secondary';
+    archive.textContent = 'Archivar';
+
+    archive.onclick = async () => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          status: 'archived',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', task.id)
+        .eq('workspace_id', workspaceId);
+
+      if (error) {
+        errorMessage(error);
+        return;
+      }
+
+      await loadAll();
+    };
+
+    actions.append(archive);
+    row.append(actions);
+
+    container.append(row);
+  });
+}
+
+function renderProjects() {
+  const container = $('projectsList');
+  container.innerHTML = '';
+
+  if (!projects.length) {
+    container.textContent = 'Todavía no tienes proyectos.';
+    return;
+  }
+
+  projects.forEach(project => {
+    const row = document.createElement('div');
+    row.className = 'item';
+
+    const info = document.createElement('span');
+    info.textContent = project.name +
+      (project.status === 'completed' ? ' (completado)' : '');
+
+    const button = document.createElement('button');
+    button.className = 'secondary';
+    button.textContent = project.status === 'active'
+      ? 'Completar' : 'Reactivar';
+
+    button.onclick = async () => {
+      const completed = project.status !== 'active';
+
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          status: completed ? 'active' : 'completed',
+          completed_at: completed ? null : new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', project.id)
+        .eq('workspace_id', workspaceId);
+
+      if (error) {
+        errorMessage(error);
+        return;
+      }
+
+      await loadAll();
+    };
+
+    row.append(info, button);
+    container.append(row);
+  });
+}
+
+function renderAreas() {
+  const container = $('areasList');
+  container.innerHTML = '';
+
+  areas.forEach(area => {
+    const row = document.createElement('div');
+    row.className = 'item';
+
+    const name = document.createElement('span');
+    name.textContent = area.name;
+
+    const count = tasks.filter(t => t.area_id === area.id).length;
+    const detail = document.createElement('small');
+    detail.textContent = count + ' tareas';
+
+    row.append(name, detail);
+    container.append(row);
+  });
+
+  if (!areas.length) container.textContent = 'Todavía no tienes áreas.';
+}
+
+function renderContexts() {
+  const container = $('contextsList');
+  container.innerHTML = '';
+
+  contexts.forEach(context => {
+    const row = document.createElement('div');
+    row.className = 'item';
+
+    const name = document.createElement('span');
+    name.textContent = context.name;
+
+    const count = tasks.filter(t => t.context_id === context.id).length;
+    const detail = document.createElement('small');
+    detail.textContent = count + ' tareas';
+
+    row.append(name, detail);
+    container.append(row);
+  });
+
+  if (!contexts.length) container.textContent = 'Todavía no tienes contextos.';
+}
+
 function startRealtime() {
   stopRealtime();
 
-  if (!workspaceId) return;
-
-  syncStatus.textContent = 'Sincronización: conectando...';
-
   realtimeChannel = supabase
-    .channel('tasks-workspace-' + workspaceId)
-
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'tasks',
-        filter: 'workspace_id=eq.' + workspaceId
-      },
-      async () => {
-        // Cuando otro dispositivo modifica una tarea,
-        // volvemos a consultar la bandeja de entrada.
-        await loadTasks();
-      }
-    )
-
-    .subscribe((status) => {
+    .channel('gtd-workspace-' + workspaceId)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'tasks',
+      filter: 'workspace_id=eq.' + workspaceId
+    }, () => loadAll())
+    .subscribe(status => {
       if (status === 'SUBSCRIBED') {
-        syncStatus.textContent = 'Sincronización: activa';
+        $('syncStatus').textContent = 'Sincronización: activa';
       } else if (status === 'CHANNEL_ERROR') {
-        syncStatus.textContent = 'Sincronización: error de conexión';
+        $('syncStatus').textContent = 'Sincronización: error de conexión';
       } else if (status === 'TIMED_OUT') {
-        syncStatus.textContent = 'Sincronización: tiempo agotado';
-      } else if (status === 'CLOSED') {
-        syncStatus.textContent = 'Sincronización: desconectada';
+        $('syncStatus').textContent = 'Sincronización: tiempo agotado';
       }
     });
 }
@@ -203,100 +611,48 @@ function stopRealtime() {
   }
 }
 
-function render() {
-  list.innerHTML = '';
-
-  if (tasks.length === 0) {
-    list.textContent = 'No tienes tareas en la bandeja de entrada.';
-    return;
-  }
-
-  tasks.forEach(task => {
-    const row = document.createElement('div');
-    row.className = 'task';
-
-    const text = document.createElement('span');
-    text.textContent = task.title;
-
-    const done = document.createElement('button');
-    done.className = 'delete';
-    done.textContent = 'Completar';
-
-    done.onclick = async () => {
-      done.disabled = true;
-
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', task.id)
-        .eq('workspace_id', workspaceId);
-
-      if (error) {
-        showError(error);
-        done.disabled = false;
-        return;
-      }
-
-      await loadTasks();
-    };
-
-    row.append(text, done);
-    list.append(row);
-  });
-}
-
 async function startApp(user) {
   stopRealtime();
-
   currentUser = user;
-  message.textContent = '';
+  clearMessage();
 
   try {
     await loadWorkspace();
-    await loadTasks();
+    await loadAll();
 
-    document.getElementById('userEmail').textContent = user.email;
-
-    login.classList.add('hidden');
-    application.classList.remove('hidden');
+    $('userEmail').textContent = user.email;
+    $('login').classList.add('hidden');
+    $('application').classList.remove('hidden');
 
     startRealtime();
-
   } catch (error) {
-    showError(error);
-    application.classList.add('hidden');
-    login.classList.remove('hidden');
+    errorMessage(error);
+    $('application').classList.add('hidden');
+    $('login').classList.remove('hidden');
   }
 }
 
-document.getElementById('loginForm').addEventListener('submit', async e => {
+$('loginForm').addEventListener('submit', async e => {
   e.preventDefault();
-  message.textContent = 'Conectando...';
-
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
+  $('message').textContent = 'Conectando...';
 
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password
+    email: $('email').value.trim(),
+    password: $('password').value
   });
 
   if (error) {
-    showError(error);
+    errorMessage(error);
     return;
   }
 
   await startApp(data.user);
 });
 
-document.getElementById('form').addEventListener('submit', async e => {
+$('captureForm').addEventListener('submit', async e => {
   e.preventDefault();
 
-  const value = title.value.trim();
+  const value = $('captureTitle').value.trim();
   if (!value || !workspaceId) return;
 
   const { error } = await supabase
@@ -309,36 +665,132 @@ document.getElementById('form').addEventListener('submit', async e => {
     });
 
   if (error) {
-    showError(error);
+    errorMessage(error);
     return;
   }
 
-  title.value = '';
-  await loadTasks();
+  $('captureTitle').value = '';
+  clearMessage();
+  await loadAll();
 });
 
-document.getElementById('logout').onclick = async () => {
+$('projectForm').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  const name = $('projectName').value.trim();
+  if (!name) return;
+
+  const { error } = await supabase
+    .from('projects')
+    .insert({
+      workspace_id: workspaceId,
+      name,
+      status: 'active'
+    });
+
+  if (error) {
+    errorMessage(error);
+    return;
+  }
+
+  $('projectName').value = '';
+  await loadAll();
+});
+
+$('areaForm').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  const name = $('areaName').value.trim();
+  if (!name) return;
+
+  const { error } = await supabase
+    .from('areas')
+    .insert({
+      workspace_id: workspaceId,
+      name
+    });
+
+  if (error) {
+    errorMessage(error);
+    return;
+  }
+
+  $('areaName').value = '';
+  await loadAll();
+});
+
+$('contextForm').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  const name = $('contextName').value.trim();
+  if (!name) return;
+
+  const { error } = await supabase
+    .from('contexts')
+    .insert({
+      workspace_id: workspaceId,
+      name
+    });
+
+  if (error) {
+    errorMessage(error);
+    return;
+  }
+
+  $('contextName').value = '';
+  await loadAll();
+});
+
+document.querySelectorAll('[data-view]').forEach(button => {
+  button.addEventListener('click', () => {
+    currentView = button.dataset.view;
+
+    document.querySelectorAll('[data-view]').forEach(b =>
+      b.classList.toggle('active', b === button)
+    );
+
+    ['inbox','actions','projects','areas','contexts','someday','reference']
+      .forEach(view => {
+        $('view-' + view).classList.toggle(
+          'hidden', view !== currentView
+        );
+      });
+  });
+});
+
+$('logout').onclick = async () => {
   stopRealtime();
 
   const { error } = await supabase.auth.signOut();
 
   if (error) {
-    showError(error);
+    errorMessage(error);
     return;
   }
 
   currentUser = null;
   workspaceId = null;
   tasks = [];
+  projects = [];
+  areas = [];
+  contexts = [];
 
-  application.classList.add('hidden');
-  login.classList.remove('hidden');
-  message.textContent = '';
+  $('application').classList.add('hidden');
+  $('login').classList.remove('hidden');
+  clearMessage();
 };
 
-document.getElementById('export').onclick = () => {
+$('export').onclick = () => {
+  const backup = {
+    exported_at: new Date().toISOString(),
+    tasks,
+    projects,
+    areas,
+    contexts
+  };
+
   const blob = new Blob(
-    [JSON.stringify(tasks, null, 2)],
+    [JSON.stringify(backup, null, 2)],
     { type: 'application/json' }
   );
 
@@ -359,13 +811,15 @@ if (sessionData.session) {
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
     stopRealtime();
-
     currentUser = null;
     workspaceId = null;
     tasks = [];
+    projects = [];
+    areas = [];
+    contexts = [];
 
-    application.classList.add('hidden');
-    login.classList.remove('hidden');
+    $('application').classList.add('hidden');
+    $('login').classList.remove('hidden');
   }
 });
 </script>
