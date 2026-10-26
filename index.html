@@ -582,28 +582,44 @@ function renderContexts() {
   if (!contexts.length) container.textContent = 'Todavía no tienes contextos.';
 }
 
-function startRealtime() {
+function startRealtime(){
   stopRealtime();
 
   realtimeChannel = supabase
     .channel('gtd-workspace-' + workspaceId)
+
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
       table: 'tasks',
       filter: 'workspace_id=eq.' + workspaceId
     }, () => loadAll())
-    .subscribe(status => {
-      if (status === 'SUBSCRIBED') {
-        $('syncStatus').textContent = 'Sincronización: activa';
-      } else if (status === 'CHANNEL_ERROR') {
-        $('syncStatus').textContent = 'Sincronización: error de conexión';
-      } else if (status === 'TIMED_OUT') {
-        $('syncStatus').textContent = 'Sincronización: tiempo agotado';
-      }
+
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'projects',
+      filter: 'workspace_id=eq.' + workspaceId
+    }, () => loadAll())
+
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'areas',
+      filter: 'workspace_id=eq.' + workspaceId
+    }, () => loadAll())
+
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'contexts',
+      filter: 'workspace_id=eq.' + workspaceId
+    }, () => loadAll())
+
+    .subscribe((status) => {
+      console.log('Realtime:', status);
     });
 }
-
 function stopRealtime() {
   if (realtimeChannel) {
     supabase.removeChannel(realtimeChannel);
