@@ -14,18 +14,44 @@ section{background:white;padding:18px;border-radius:14px;margin-bottom:15px}
 form{display:flex;gap:8px}
 input{padding:12px;border:1px solid #ccc;border-radius:8px;min-width:0;flex:1}
 button{background:#3157d5;color:white;border:0;border-radius:8px;padding:12px;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}
 .task{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #eee}
 .task span{flex:1;overflow-wrap:anywhere}
-.delete{background:#b42318}
+.delete{background:#16804a}
+.secondary{background:#667085}
+#message{margin-top:12px;color:#b42318;overflow-wrap:anywhere}
+#userbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 small{color:#667085}
+.hidden{display:none}
 </style>
 </head>
 <body>
+
 <header>
 <h1>Mi GTD</h1>
 <p>Tu sistema personal de organización</p>
 </header>
+
 <main>
+<section id="login">
+<h2>Iniciar sesión</h2>
+<form id="loginForm">
+<input id="email" type="email" placeholder="Correo electrónico" required>
+<input id="password" type="password" placeholder="Contraseña" required>
+<button type="submit">Entrar</button>
+</form>
+<p id="message"></p>
+</section>
+
+<div id="application" class="hidden">
+<section>
+<div id="userbar">
+<span id="userEmail"></span>
+<button id="logout" class="secondary">Cerrar sesión</button>
+</div>
+<small id="workspaceName"></small>
+</section>
+
 <section>
 <h2>Captura rápida</h2>
 <form id="form">
@@ -33,52 +59,243 @@ small{color:#667085}
 <button type="submit">Añadir</button>
 </form>
 </section>
+
 <section>
 <h2>Bandeja de entrada</h2>
 <div id="tasks"></div>
 </section>
+
 <section>
 <button id="export">Exportar copia de seguridad</button>
 </section>
+</div>
 </main>
-<script>
-const key="miGTD";
-let tasks=JSON.parse(localStorage.getItem(key)||"[]");
-const title=document.getElementById("title");
-const list=document.getElementById("tasks");
 
-function save(){
- localStorage.setItem(key,JSON.stringify(tasks));
- render();
+<script type="module">
+import { createClient } from
+'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+// CONFIGURACIÓN DE TU PROYECTO
+const SUPABASE_URL = 'https://ywdcbviwkxtpawktzksc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_vV683CF7NXaEz9yJ_TaUpw_aw33Jr-1';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const login = document.getElementById('login');
+const application = document.getElementById('application');
+const message = document.getElementById('message');
+const list = document.getElementById('tasks');
+const title = document.getElementById('title');
+
+let currentUser = null;
+let workspaceId = null;
+let tasks = [];
+
+function showError(error) {
+  message.textContent = error.message || String(error);
 }
-function render(){
- list.innerHTML="";
- tasks.forEach((task,index)=>{
-  const row=document.createElement("div");
-  row.className="task";
-  const text=document.createElement("span");
-  text.textContent=task;
-  const done=document.createElement("button");
-  done.className="delete";
-  done.textContent="Completar";
-  done.onclick=()=>{tasks.splice(index,1);save()};
-  row.append(text,done);
-  list.append(row);
- });
+
+async function loadWorkspace() {
+  const { data, error } = await supabase
+    .from('workspace_members')
+    .select('workspace_id, role')
+    .eq('user_id', currentUser.id);
+
+  if (error) throw error;
+
+  if (!data || data.length === 0) {
+    throw new Error('Tu usuario no tiene ningún espacio de trabajo.');
+  }
+
+  // De momento utilizamos el espacio personal.
+  const membership = data.find(item => item.role === 'owner');
+
+  if (!membership) {
+    throw new Error('No se ha encontrado tu espacio personal.');
+  }
+
+  workspaceId = membership.workspace_id;
+
+  const { data: workspace, error: workspaceError } = await supabase
+    .from('workspaces')
+    .select('name')
+    .eq('id', workspaceId)
+    .single();
+
+  if (workspaceError) throw workspaceError;
+
+  document.getElementById('workspaceName').textContent =
+    'Espacio: ' + workspace.name;
 }
-document.getElementById("form").addEventListener("submit",e=>{
- e.preventDefault();
- const value=title.value.trim();
- if(value){tasks.push(value);title.value="";save()}
+
+async function loadTasks() {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, title, status, created_at')
+    .eq('workspace_id', workspaceId)
+    .eq('status', 'inbox')
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+
+  tasks = data || [];
+  render();
+}
+
+function render() {
+  list.innerHTML = '';
+
+  if (tasks.length === 0) {
+    list.textContent = 'No tienes tareas en la bandeja de entrada.';
+    return;
+  }
+
+  tasks.forEach(task => {
+    const row = document.createElement('div');
+    row.className = 'task';
+
+    const text = document.createElement('span');
+    text.textContent = task.title;
+
+    const done = document.createElement('button');
+    done.className = 'delete';
+    done.textContent = 'Completar';
+
+    done.onclick = async () => {
+      done.disabled = true;
+
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', task.id)
+        .eq('workspace_id', workspaceId);
+
+      if (error) {
+        showError(error);
+        done.disabled = false;
+        return;
+      }
+
+      await loadTasks();
+    };
+
+    row.append(text, done);
+    list.append(row);
+  });
+}
+
+async function startApp(user) {
+  currentUser = user;
+  message.textContent = '';
+
+  try {
+    await loadWorkspace();
+    await loadTasks();
+
+    document.getElementById('userEmail').textContent = user.email;
+    login.classList.add('hidden');
+    application.classList.remove('hidden');
+  } catch (error) {
+    showError(error);
+    application.classList.add('hidden');
+    login.classList.remove('hidden');
+  }
+}
+
+document.getElementById('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  message.textContent = 'Conectando...';
+
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    showError(error);
+    return;
+  }
+
+  await startApp(data.user);
 });
-document.getElementById("export").onclick=()=>{
- const blob=new Blob([JSON.stringify(tasks,null,2)],{type:"application/json"});
- const a=document.createElement("a");
- a.href=URL.createObjectURL(blob);
- a.download="mi-gtd-copia.json";
- a.click();
+
+document.getElementById('form').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  const value = title.value.trim();
+  if (!value || !workspaceId) return;
+
+  const { error } = await supabase
+    .from('tasks')
+    .insert({
+      workspace_id: workspaceId,
+      title: value,
+      kind: 'action',
+      status: 'inbox'
+    });
+
+  if (error) {
+    showError(error);
+    return;
+  }
+
+  title.value = '';
+  await loadTasks();
+});
+
+document.getElementById('logout').onclick = async () => {
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    showError(error);
+    return;
+  }
+
+  currentUser = null;
+  workspaceId = null;
+  tasks = [];
+
+  application.classList.add('hidden');
+  login.classList.remove('hidden');
+  message.textContent = '';
 };
-render();
+
+document.getElementById('export').onclick = () => {
+  const blob = new Blob(
+    [JSON.stringify(tasks, null, 2)],
+    { type: 'application/json' }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mi-gtd-copia.json';
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const { data: sessionData } = await supabase.auth.getSession();
+
+if (sessionData.session) {
+  await startApp(sessionData.session.user);
+}
+
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') {
+    currentUser = null;
+    workspaceId = null;
+    tasks = [];
+    application.classList.add('hidden');
+    login.classList.remove('hidden');
+  }
+});
 </script>
 </body>
 </html>
