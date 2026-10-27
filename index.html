@@ -29,6 +29,9 @@ form input{flex:1}
 .task-title{font-weight:bold;margin-bottom:7px;overflow-wrap:anywhere}
 .task-meta{font-size:12px;color:#64748b;margin:6px 0}
 .task-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-top:10px}
+.recurrence-box{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;padding:9px;background:#f0f4fb;border-radius:8px;font-size:12px}
+.recurrence-box input[type=checkbox]{width:auto}
+.recurrence-box select,.recurrence-box input[type=number]{width:auto;max-width:115px;padding:6px}
 .task-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .task-actions button,.icon-button{width:34px;height:32px;padding:6px;display:inline-flex;align-items:center;justify-content:center}
 .icon-button svg,.task-actions button svg{width:17px;height:17px;display:block}
@@ -397,6 +400,95 @@ function startOfDay(date) {
   return result;
 }
 
+function addRecurrenceDate(date, frequency, interval, anchorDay) {
+  const result = new Date(date);
+  if (frequency === 'daily') {
+    result.setDate(result.getDate() + interval);
+  } else if (frequency === 'weekly') {
+    result.setDate(result.getDate() + 7 * interval);
+  } else if (frequency === 'monthly') {
+    const targetMonth = result.getMonth() + interval;
+    const firstOfTarget = new Date(result.getFullYear(), targetMonth, 1);
+    const lastDay = new Date(firstOfTarget.getFullYear(), firstOfTarget.getMonth() + 1, 0).getDate();
+    result.setFullYear(firstOfTarget.getFullYear(), firstOfTarget.getMonth(), Math.min(anchorDay || result.getDate(), lastDay));
+  }
+  return result;
+}
+
+function shiftRecurrenceDate(value, frequency, interval, anchorDay) {
+  const date = parseLocalDate(value);
+  return date ? localDateString(addRecurrenceDate(date, frequency, interval, anchorDay)) : null;
+}
+
+async function completeTask(task, button) {
+  if (button) button.disabled = true;
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const recurring = task.recurrence_enabled && task.recurrence_frequency;
+
+  const { error: completeError } = await supabase.from('tasks').update({
+    status: 'completed',
+    completed_at: nowIso,
+    updated_at: nowIso
+  }).eq('id', task.id).eq('workspace_id', workspaceId);
+
+  if (completeError) {
+    if (button) button.disabled = false;
+    errorMessage(completeError);
+    return;
+  }
+
+  if (recurring) {
+    const frequency = task.recurrence_frequency;
+    const interval = Math.max(1, Number(task.recurrence_interval) || 1);
+    const anchorDay = Number(task.recurrence_day_of_month) ||
+      (task.available_from ? parseLocalDate(task.available_from).getDate() :
+       task.due_at ? parseLocalDate(task.due_at).getDate() : now.getDate());
+
+    const baseValue = task.available_from || task.due_at || localDateString(now);
+    const nextAvailable = shiftRecurrenceDate(baseValue, frequency, interval, anchorDay);
+    const nextDue = task.due_at
+      ? shiftRecurrenceDate(task.due_at, frequency, interval, frequency === 'monthly' ? parseLocalDate(task.due_at).getDate() : anchorDay)
+      : null;
+    const seriesId = task.recurrence_series_id || crypto.randomUUID();
+    const occurrenceKey = nextAvailable || nextDue || localDateString(now);
+
+    const nextTask = {
+      workspace_id: workspaceId,
+      project_id: task.project_id,
+      context_id: task.context_id,
+      area_id: task.area_id,
+      title: task.title,
+      notes: task.notes,
+      kind: task.kind,
+      status: task.kind === 'waiting_for' ? 'waiting' : (nextAvailable ? 'scheduled' : 'active'),
+      available_from: nextAvailable ? nextAvailable + 'T00:00:00' : null,
+      due_at: nextDue ? nextDue + 'T00:00:00' : null,
+      due_has_time: task.due_has_time || false,
+      estimated_minutes: task.estimated_minutes,
+      energy: task.energy,
+      delegated_to: task.delegated_to,
+      waiting_for: task.waiting_for,
+      recurrence_series_id: seriesId,
+      recurrence_frequency: frequency,
+      recurrence_interval: interval,
+      recurrence_day_of_month: frequency === 'monthly' ? anchorDay : null,
+      recurrence_enabled: true,
+      occurrence_key: occurrenceKey
+    };
+
+    const { error: insertError } = await supabase.from('tasks').insert(nextTask);
+    if (insertError) {
+      errorMessage(new Error('La tarea se ha completado, pero no se pudo crear la siguiente ocurrencia: ' + insertError.message));
+      await loadAll();
+      return;
+    }
+  }
+
+  clearMessage();
+  await loadAll();
+}
+
 function renderTasks(containerId, items) {
   const container = $(containerId);
   container.innerHTML = '';
@@ -465,7 +557,46 @@ function renderTasks(containerId, items) {
     kind.addEventListener('change', () => waiting.classList.toggle('hidden', kind.value !== 'waiting_for'));
 
     editor.append(kind, projectSelect, areaSelect, contextSelect, scheduled, due, waiting);
-    row.append(editor);
+
+    const recurrenceBox = document.createElement('div');
+    recurrenceBox.className = 'recurrence-box';
+    const recurrenceEnabled = document.createElement('input');
+    recurrenceEnabled.type = 'checkbox';
+    recurrenceEnabled.checked = !!task.recurrence_enabled;
+    recurrenceEnabled.id = 'recurrence-enabled-' + task.id;
+    const recurrenceLabel = document.createElement('label');
+    recurrenceLabel.htmlFor = recurrenceEnabled.id;
+    recurrenceLabel.textContent = 'Repetir';
+
+    const recurrenceFrequency = document.createElement('select');
+    recurrenceFrequency.innerHTML = `
+      <option value="daily">Cada día</option>
+      <option value="weekly">Cada semana</option>
+      <option value="monthly">Cada mes</option>`;
+    recurrenceFrequency.value = task.recurrence_frequency || 'weekly';
+
+    const recurrenceInterval = document.createElement('input');
+    recurrenceInterval.type = 'number';
+    recurrenceInterval.min = '1';
+    recurrenceInterval.max = '365';
+    recurrenceInterval.step = '1';
+    recurrenceInterval.value = String(Math.max(1, Number(task.recurrence_interval) || 1));
+    recurrenceInterval.title = 'Intervalo de repetición';
+    recurrenceInterval.setAttribute('aria-label', 'Intervalo de repetición');
+
+    const recurrenceUnit = document.createElement('span');
+    const updateRecurrenceVisibility = () => {
+      const enabled = recurrenceEnabled.checked;
+      recurrenceFrequency.classList.toggle('hidden', !enabled);
+      recurrenceInterval.classList.toggle('hidden', !enabled);
+      recurrenceUnit.classList.toggle('hidden', !enabled);
+      recurrenceUnit.textContent = recurrenceFrequency.value === 'daily' ? 'día(s)' : recurrenceFrequency.value === 'weekly' ? 'semana(s)' : 'mes(es)';
+    };
+    recurrenceEnabled.addEventListener('change', updateRecurrenceVisibility);
+    recurrenceFrequency.addEventListener('change', updateRecurrenceVisibility);
+    recurrenceBox.append(recurrenceEnabled, recurrenceLabel, recurrenceFrequency, recurrenceInterval, recurrenceUnit);
+    updateRecurrenceVisibility();
+    row.append(editor, recurrenceBox);
 
     const actions = document.createElement('div');
     actions.className = 'task-actions';
@@ -486,6 +617,14 @@ function renderTasks(containerId, items) {
         available_from: scheduled.value ? scheduled.value + 'T00:00:00' : null,
         due_at: due.value ? due.value + 'T00:00:00' : null,
         waiting_for: newKind === 'waiting_for' ? (waiting.value.trim() || null) : null,
+        recurrence_enabled: recurrenceEnabled.checked,
+        recurrence_frequency: recurrenceEnabled.checked ? recurrenceFrequency.value : null,
+        recurrence_interval: recurrenceEnabled.checked ? Math.max(1, Math.min(365, Number(recurrenceInterval.value) || 1)) : 1,
+        recurrence_day_of_month: recurrenceEnabled.checked && recurrenceFrequency.value === 'monthly'
+          ? (task.recurrence_day_of_month || (scheduled.value ? Number(scheduled.value.slice(8, 10)) : due.value ? Number(due.value.slice(8, 10)) : new Date().getDate()))
+          : null,
+        recurrence_series_id: recurrenceEnabled.checked ? (task.recurrence_series_id || crypto.randomUUID()) : null,
+        occurrence_key: task.occurrence_key || null,
         updated_at: new Date().toISOString()
       };
 
@@ -500,13 +639,8 @@ function renderTasks(containerId, items) {
     }));
 
     if (task.status !== 'completed') {
-      actions.append(iconButton('check', 'Marcar como realizada', 'green', async () => {
-        const now = new Date().toISOString();
-        const { error } = await supabase.from('tasks').update({
-          status: 'completed', completed_at: now, updated_at: now
-        }).eq('id', task.id).eq('workspace_id', workspaceId);
-        if (error) { errorMessage(error); return; }
-        await loadAll();
+      actions.append(iconButton('check', 'Marcar como realizada', 'green', async (event) => {
+        await completeTask(task, event.currentTarget);
       }));
     }
 
