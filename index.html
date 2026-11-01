@@ -11,7 +11,9 @@
 <style>
 *{box-sizing:border-box}
 body{font-family:Arial,sans-serif;background:#f2f5fb;color:#202b42;margin:0;padding:15px}
-header{background:linear-gradient(115deg,#263b67,#3157a4);color:white;padding:11px 17px;border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+header{background:#fff;color:#344563;padding:8px 12px;border:1px solid #e5eaf3;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+header h1{color:#294575}
+header p{color:#64748b}
 header h1{font-size:19px;margin:0;font-weight:650}
 header p{font-size:12px;margin:0;opacity:.8}
 main{max-width:1050px;margin:15px auto}
@@ -26,7 +28,24 @@ form input{flex:1}
 .secondary{background:#64748b}
 .green{background:#16804a}
 .red{background:#b42318}
-.task{border-bottom:1px solid #e8edf5;padding:13px 10px;border-left:3px solid #7c9bea;margin:7px 0;background:#fbfcff;border-radius:0 9px 9px 0}
+.task{border-bottom:1px solid #e8edf5;padding:10px 9px;border-left:3px solid #7c9bea;margin:7px 0;background:#fbfcff;border-radius:0 9px 9px 0}
+.task.state-action{border-left-color:#3157d5}.task.state-waiting{border-left-color:#e58a25}.task.state-overdue{border-left-color:#c93636}.task.state-completed{border-left-color:#16804a}.task.state-muted{border-left-color:#98a2b3}
+.task-mainline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.task-title{font-weight:650;margin:0;overflow-wrap:anywhere;cursor:pointer;flex:1 1 220px}
+.task-title:hover{color:#3157d5}
+.task-date-badges{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.date-badge{font-size:12px;line-height:1.35;padding:3px 6px;border-radius:6px;white-space:nowrap;background:#eaf0ff;color:#3157a4}
+.date-badge.due{background:#fff0e8;color:#b54708}
+.date-badge.reminder{background:#f1eaff;color:#6941a5}
+.task-description-preview{font-size:12px;color:#667085;margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.task-detail-overlay{position:fixed;inset:0;background:#10182899;z-index:1000;display:flex;align-items:center;justify-content:center;padding:14px}
+.task-detail-panel{background:#fff;border-radius:14px;width:min(720px,100%);max-height:92vh;overflow:auto;padding:20px;box-shadow:0 16px 50px #10182840}
+.task-detail-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.task-detail-head h2{margin:0}
+.task-detail-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.task-detail-form .field.full{grid-column:1/-1}
+.task-detail-form textarea{min-height:125px}
+.task-detail-footer{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
 .task-title{font-weight:bold;margin-bottom:7px;overflow-wrap:anywhere}
 .task-meta{font-size:12px;color:#64748b;margin:6px 0}
 .task-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-top:10px}
@@ -63,6 +82,9 @@ h3{font-size:15px;color:#526b99}
  form button{width:100%}
  .agenda-controls button{flex:1}
  .task-controls{grid-template-columns:1fr 1fr}
+ .task-detail-panel{padding:15px}
+ .task-detail-form{grid-template-columns:1fr}
+ .task-detail-form .field.full{grid-column:auto}
 }
 </style>
 </head>
@@ -200,6 +222,7 @@ h3{font-size:15px;color:#526b99}
 </div>
 </main>
 
+<div id="taskDetailOverlay" class="task-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="taskDetailHeading"><div class="task-detail-panel"><div class="task-detail-head"><h2 id="taskDetailHeading">Detalles de la tarea</h2><button type="button" id="closeTaskDetail" class="secondary" aria-label="Cerrar">✕</button></div><form id="taskDetailForm"><div class="task-detail-form"><div class="field full"><label for="detailTitle">Título</label><input id="detailTitle" required maxlength="250"></div><div class="field full"><label for="detailNotes">Más detalles / descripción</label><textarea id="detailNotes" placeholder="Describe qué hay que hacer, información útil, enlaces, pasos..."></textarea></div><div class="field"><label for="detailKind">Tipo</label><select id="detailKind"><option value="action">Próxima acción</option><option value="waiting_for">Pendiente de otra persona</option><option value="someday_maybe">Algún día / Tal vez</option><option value="reference">Referencia</option></select></div><div class="field"><label for="detailStatus">Estado</label><select id="detailStatus"><option value="inbox">Bandeja</option><option value="active">Activa</option><option value="scheduled">Programada</option><option value="waiting">En espera</option><option value="completed">Realizada</option><option value="archived">Archivada</option></select></div><div class="field"><label for="detailProject">Proyecto</label><select id="detailProject"></select></div><div class="field"><label for="detailArea">Área</label><select id="detailArea"></select></div><div class="field"><label for="detailContext">Contexto</label><select id="detailContext"></select></div><div class="field"><label for="detailWaiting">Esperando a</label><input id="detailWaiting" placeholder="Persona o elemento del que dependes"></div><div class="field"><label for="detailScheduled">Fecha programada</label><input id="detailScheduled" type="date"></div><div class="field"><label for="detailDue">Fecha límite</label><input id="detailDue" type="date"></div><div class="field full"><label for="detailReminder">Recordarme el (fecha y hora)</label><input id="detailReminder" type="datetime-local"></div></div><div class="task-detail-footer"><button type="button" id="cancelTaskDetail" class="secondary">Cancelar</button><button type="submit">Guardar tarea</button></div></form></div></div>
 <script type="module">
 import { createClient } from
 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
@@ -406,142 +429,68 @@ function startOfDay(date) {
   return result;
 }
 
+function toLocalDateTimeInput(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0,16);
+}
+function openTaskDetails(taskId) {
+  const task = tasks.find(t => t.id === taskId); if (!task) return;
+  $('detailTitle').value = task.title || ''; $('detailNotes').value = task.notes || '';
+  $('detailKind').value = task.kind || 'action'; $('detailStatus').value = task.status || 'inbox';
+  $('detailProject').innerHTML = optionList(projects, task.project_id, 'Sin proyecto');
+  $('detailArea').innerHTML = optionList(areas, task.area_id, 'Sin área');
+  $('detailContext').innerHTML = optionList(contexts, task.context_id, 'Sin contexto');
+  $('detailWaiting').value = task.waiting_for || '';
+  $('detailScheduled').value = task.available_from ? String(task.available_from).slice(0,10) : '';
+  $('detailDue').value = task.due_at ? String(task.due_at).slice(0,10) : '';
+  $('detailReminder').value = toLocalDateTimeInput(task.reminder_at);
+  $('taskDetailForm').dataset.taskId = task.id; $('taskDetailOverlay').classList.remove('hidden'); document.body.style.overflow = 'hidden';
+}
+function closeTaskDetails() { $('taskDetailOverlay').classList.add('hidden'); document.body.style.overflow = ''; }
+$('closeTaskDetail').addEventListener('click', closeTaskDetails); $('cancelTaskDetail').addEventListener('click', closeTaskDetails);
+$('taskDetailOverlay').addEventListener('click', e => { if (e.target === $('taskDetailOverlay')) closeTaskDetails(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('taskDetailOverlay').classList.contains('hidden')) closeTaskDetails(); });
+$('taskDetailForm').addEventListener('submit', async e => {
+  e.preventDefault(); const id = e.currentTarget.dataset.taskId; const task = tasks.find(t => t.id === id); if (!task) return;
+  const kind = $('detailKind').value, status = $('detailStatus').value;
+  const updates = {title:$('detailTitle').value.trim(),notes:$('detailNotes').value.trim() || null,kind,status,
+    project_id:$('detailProject').value || null,area_id:$('detailArea').value || null,context_id:$('detailContext').value || null,
+    waiting_for:kind === 'waiting_for' ? ($('detailWaiting').value.trim() || null) : null,
+    available_from:$('detailScheduled').value ? $('detailScheduled').value+'T00:00:00' : null,
+    due_at:$('detailDue').value ? $('detailDue').value+'T00:00:00' : null,
+    reminder_at:$('detailReminder').value ? new Date($('detailReminder').value).toISOString() : null,
+    completed_at:status === 'completed' ? (task.completed_at || new Date().toISOString()) : null,updated_at:new Date().toISOString()};
+  if (!updates.title) { alert('El título es obligatorio.'); return; }
+  const btn=e.currentTarget.querySelector('button[type="submit"]'); btn.disabled=true;
+  const {error}=await supabase.from('tasks').update(updates).eq('id',id).eq('workspace_id',workspaceId); btn.disabled=false;
+  if(error){errorMessage(error);return;} clearMessage();closeTaskDetails();await loadAll();
+});
 function renderTasks(containerId, items) {
-  const container = $(containerId);
-  container.innerHTML = '';
-
-  if (!items.length) {
-    container.textContent = 'No hay elementos en este apartado.';
-    return;
-  }
-
-  items.forEach(task => {
-    const row = document.createElement('div');
-    row.className = 'task';
-
-    const title = document.createElement('div');
-    title.className = 'task-title';
-    title.textContent = task.title;
-    row.append(title);
-
-    const meta = document.createElement('div');
-    meta.className = 'task-meta';
-    const project = projects.find(p => p.id === task.project_id);
-    const area = areas.find(a => a.id === task.area_id);
-    const context = contexts.find(c => c.id === task.context_id);
-    meta.textContent = [
-      project ? 'Proyecto: ' + project.name : '',
-      area ? 'Área: ' + area.name : '',
-      context ? 'Contexto: ' + context.name : '',
-      task.status === 'waiting' ? 'En espera' : ''
-    ].filter(Boolean).join(' · ');
-    row.append(meta);
-
-    const editor = document.createElement('div');
-    editor.className = 'task-controls';
-
-    const kind = document.createElement('select');
-    kind.innerHTML = `
-      <option value="action">Próxima acción</option>
-      <option value="waiting_for">Pendiente de otra persona</option>
-      <option value="someday_maybe">Algún día / Tal vez</option>
-      <option value="reference">Referencia</option>`;
-    kind.value = task.kind;
-
-    const projectSelect = document.createElement('select');
-    projectSelect.innerHTML = optionList(projects, task.project_id, 'Sin proyecto');
-
-    const areaSelect = document.createElement('select');
-    areaSelect.innerHTML = optionList(areas, task.area_id, 'Sin área');
-
-    const contextSelect = document.createElement('select');
-    contextSelect.innerHTML = optionList(contexts, task.context_id, 'Sin contexto');
-
-    const scheduled = document.createElement('input');
-    scheduled.type = 'date';
-    scheduled.title = 'Fecha programada';
-    scheduled.value = task.available_from ? task.available_from.substring(0,10) : '';
-
-    const due = document.createElement('input');
-    due.type = 'date';
-    due.title = 'Fecha límite';
-    due.value = task.due_at ? task.due_at.substring(0,10) : '';
-
-    const waiting = document.createElement('input');
-    waiting.placeholder = '¿De quién dependes?';
-    waiting.value = task.waiting_for || '';
-    waiting.classList.toggle('hidden', task.kind !== 'waiting_for');
-    kind.addEventListener('change', () => waiting.classList.toggle('hidden', kind.value !== 'waiting_for'));
-
-    editor.append(kind, projectSelect, areaSelect, contextSelect, scheduled, due, waiting);
-    row.append(editor);
-
-    const actions = document.createElement('div');
-    actions.className = 'task-actions';
-
-    actions.append(iconButton('save', 'Guardar cambios', '', async () => {
-      const newKind = kind.value;
-      let newStatus = task.status;
-      if (newKind === 'action') newStatus = scheduled.value ? 'scheduled' : 'active';
-      else if (newKind === 'waiting_for') newStatus = 'waiting';
-      else newStatus = 'active';
-
-      const updates = {
-        kind: newKind,
-        status: newStatus,
-        project_id: projectSelect.value || null,
-        area_id: areaSelect.value || null,
-        context_id: contextSelect.value || null,
-        available_from: scheduled.value ? scheduled.value + 'T00:00:00' : null,
-        due_at: due.value ? due.value + 'T00:00:00' : null,
-        waiting_for: newKind === 'waiting_for' ? (waiting.value.trim() || null) : null,
-        updated_at: new Date().toISOString()
-      };
-
-      const saveButton = actions.querySelector('button[aria-label="Guardar cambios"]');
-      saveButton.disabled = true;
-      const { error } = await supabase.from('tasks').update(updates)
-        .eq('id', task.id).eq('workspace_id', workspaceId);
-      saveButton.disabled = false;
-      if (error) { errorMessage(error); return; }
-      clearMessage();
-      await loadAll();
-    }));
-
-    if (task.status !== 'completed') {
-      actions.append(iconButton('check', 'Marcar como realizada', 'green', async () => {
-        const now = new Date().toISOString();
-        const { error } = await supabase.from('tasks').update({
-          status: 'completed', completed_at: now, updated_at: now
-        }).eq('id', task.id).eq('workspace_id', workspaceId);
-        if (error) { errorMessage(error); return; }
-        await loadAll();
-      }));
-    }
-
-    actions.append(iconButton('calendar', 'Posponer: elegir nueva fecha prevista', 'secondary', () => {
-      scheduled.focus();
-      scheduled.showPicker?.();
-    }));
-
-    actions.append(iconButton('archive', 'Archivar', 'secondary', async () => {
-      const { error } = await supabase.from('tasks').update({
-        status: 'archived', updated_at: new Date().toISOString()
-      }).eq('id', task.id).eq('workspace_id', workspaceId);
-      if (error) { errorMessage(error); return; }
-      await loadAll();
-    }));
-
-    actions.append(iconButton('trash', 'Eliminar definitivamente', 'red', async () => {
-      if (!confirm('¿Eliminar definitivamente esta tarea? Esta acción no se puede deshacer.')) return;
-      const { error } = await supabase.from('tasks').delete()
-        .eq('id', task.id).eq('workspace_id', workspaceId);
-      if (error) { errorMessage(error); return; }
-      await loadAll();
-    }));
-
-    row.append(actions);
-    container.append(row);
+  const container=$(containerId); container.innerHTML='';
+  if(!items.length){container.textContent='No hay elementos en este apartado.';return;}
+  items.forEach(task=>{
+    const row=document.createElement('div');row.className='task';
+    const isOverdue=task.status!=='completed' && task.due_at && parseLocalDate(task.due_at)<startOfDay(new Date());
+    row.classList.add(task.status==='completed'?'state-completed':(['archived'].includes(task.status)||task.kind==='reference'?'state-muted':task.status==='waiting'?'state-waiting':isOverdue?'state-overdue':'state-action'));
+    const main=document.createElement('div');main.className='task-mainline';
+    const title=document.createElement('div');title.className='task-title';title.textContent=task.title||'Sin título';title.tabIndex=0;title.setAttribute('role','button');
+    title.setAttribute('aria-label','Abrir detalles de '+(task.title||'la tarea'));title.addEventListener('click',()=>openTaskDetails(task.id));
+    title.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openTaskDetails(task.id);}});main.append(title);
+    const badges=document.createElement('div');badges.className='task-date-badges';
+    if(task.available_from){const b=document.createElement('span');b.className='date-badge';const d=parseLocalDate(task.available_from);b.textContent='Desde '+(d?d.toLocaleDateString('es-ES'):String(task.available_from).slice(0,10));badges.append(b);}
+    if(task.due_at){const b=document.createElement('span');b.className='date-badge due';const d=parseLocalDate(task.due_at);b.textContent='Límite '+(d?d.toLocaleDateString('es-ES'):String(task.due_at).slice(0,10));badges.append(b);}
+    if(task.reminder_at){const b=document.createElement('span');b.className='date-badge reminder';b.textContent='Aviso '+new Date(task.reminder_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'});badges.append(b);}
+    if(badges.childElementCount)main.append(badges);row.append(main);
+    if(task.notes){const desc=document.createElement('div');desc.className='task-description-preview';desc.textContent=task.notes;row.append(desc);}
+    const meta=document.createElement('div');meta.className='task-meta';const project=projects.find(p=>p.id===task.project_id),area=areas.find(a=>a.id===task.area_id),context=contexts.find(c=>c.id===task.context_id);
+    meta.textContent=[project?'Proyecto: '+project.name:'',area?'Área: '+area.name:'',context?'Contexto: '+context.name:'',task.status==='waiting'?'En espera':'',task.status==='completed'?'Realizada':'',task.status==='archived'?'Archivada':''].filter(Boolean).join(' · ');if(meta.textContent)row.append(meta);
+    const actions=document.createElement('div');actions.className='task-actions';actions.append(iconButton('edit','Ver / editar detalles','secondary',()=>openTaskDetails(task.id)));
+    if(task.status!=='completed')actions.append(iconButton('check','Marcar como realizada','green',async()=>{const now=new Date().toISOString();const {error}=await supabase.from('tasks').update({status:'completed',completed_at:now,updated_at:now}).eq('id',task.id).eq('workspace_id',workspaceId);if(error){errorMessage(error);return;}await loadAll();}));
+    actions.append(iconButton('archive','Archivar','secondary',async()=>{const {error}=await supabase.from('tasks').update({status:'archived',updated_at:new Date().toISOString()}).eq('id',task.id).eq('workspace_id',workspaceId);if(error){errorMessage(error);return;}await loadAll();}));
+    actions.append(iconButton('trash','Eliminar definitivamente','red',async()=>{if(!confirm('¿Eliminar definitivamente esta tarea? Esta acción no se puede deshacer.'))return;const {error}=await supabase.from('tasks').delete().eq('id',task.id).eq('workspace_id',workspaceId);if(error){errorMessage(error);return;}await loadAll();}));
+    row.append(actions);container.append(row);
   });
 }
 
