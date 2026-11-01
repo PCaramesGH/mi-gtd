@@ -20,14 +20,20 @@ main{max-width:1050px;margin:15px auto}
 section{background:white;padding:18px;border:1px solid #e5eaf3;border-radius:13px;margin-bottom:13px;box-shadow:0 2px 8px #243b6410}
 input,select,textarea{padding:10px;border:1px solid #cbd5e1;border-radius:8px;width:100%;min-width:0;font:inherit;background:#fff}
 textarea{min-height:65px;resize:vertical}
-button{background:#3157d5;color:white;border:0;border-radius:8px;padding:8px 10px;cursor:pointer;font:inherit;font-size:13px}
-button:disabled{opacity:.5;cursor:wait}
+button{background:#3157d5;color:white;border:1px solid transparent;border-radius:8px;padding:8px 11px;cursor:pointer;font:inherit;font-size:13px;font-weight:600;transition:background .15s ease,border-color .15s ease,transform .15s ease,box-shadow .15s ease}
+button:hover:not(:disabled){filter:brightness(.94);box-shadow:0 2px 6px #243b6420}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
 form{display:flex;gap:8px;flex-wrap:wrap}
 form input{flex:1}
 .hidden{display:none!important}
-.secondary{background:#64748b}
-.green{background:#16804a}
-.red{background:#b42318}
+.secondary{background:#eef2f7;color:#475467;border-color:#d5dce7}
+.green{background:#16804a;color:#fff}
+.red{background:#b42318;color:#fff}
+/* Acciones: primarias en azul, confirmaciones en verde y destructivas en rojo. */
+.task-actions button[title*="Eliminar"],button.red{background:#b42318;color:#fff}
+.task-actions button[title*="Completar"],button.green{background:#16804a;color:#fff}
+.task-actions button[title*="Archivar"]{background:#eef2f7;color:#475467;border-color:#d5dce7}
 .task{border-bottom:1px solid #e8edf5;padding:10px 9px;border-left:3px solid #7c9bea;margin:7px 0;background:#fbfcff;border-radius:0 9px 9px 0}
 .task.state-action{border-left-color:#3157d5}.task.state-waiting{border-left-color:#e58a25}.task.state-overdue{border-left-color:#c93636}.task.state-completed{border-left-color:#16804a}.task.state-muted{border-left-color:#98a2b3}
 .task-mainline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
@@ -54,8 +60,17 @@ form input{flex:1}
 .icon-button svg,.task-actions button svg{width:17px;height:17px;display:block}
 .icon-button:focus-visible,button:focus-visible{outline:3px solid #9bb8ff;outline-offset:2px}
 .nav{display:flex;gap:6px;flex-wrap:wrap;margin:13px 0}
-.nav button{background:#dce4f2;color:#344563;padding:8px 10px}
-.nav button.active{background:#3157d5;color:white}
+ .nav button{background:#f0f3f8;color:#475467;border:1px solid #dce3ed;padding:8px 11px}
+.nav button[data-view="inbox"]:not(.active){background:#eaf1ff;color:#3157a4;border-color:#d6e3ff}
+.nav button[data-view="actions"]:not(.active){background:#e7f6f3;color:#087e70;border-color:#ccebe5}
+.nav button[data-view="agenda"]:not(.active){background:#f2edff;color:#6941a5;border-color:#e4d9ff}
+.nav button[data-view="history"]:not(.active){background:#eef1f5;color:#526071;border-color:#dce2e9}
+.nav button[data-view="projects"]:not(.active){background:#edf0ff;color:#414fa3;border-color:#dce1ff}
+.nav button[data-view="areas"]:not(.active){background:#edf7e9;color:#477b35;border-color:#d9ebd1}
+.nav button[data-view="contexts"]:not(.active){background:#fff5e8;color:#9a5b12;border-color:#f5e2c6}
+.nav button[data-view="someday"]:not(.active){background:#e9f7fb;color:#176b83;border-color:#d1edf4}
+.nav button[data-view="reference"]:not(.active){background:#f1f2f4;color:#596273;border-color:#e0e3e8}
+.nav button.active{background:#253f8f;color:white;border-color:#253f8f;box-shadow:0 2px 7px #253f8f35}
 .item{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e8edf5;padding:10px 0}
 .item span{overflow-wrap:anywhere}
 .small{font-size:12px;color:#667085}
