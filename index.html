@@ -70,6 +70,8 @@ form input{flex:1}
 .nav button[data-view="contexts"]:not(.active){background:#fff5e8;color:#9a5b12;border-color:#f5e2c6}
 .nav button[data-view="someday"]:not(.active){background:#e9f7fb;color:#176b83;border-color:#d1edf4}
 .nav button[data-view="reference"]:not(.active){background:#f1f2f4;color:#596273;border-color:#e0e3e8}
+.nav button[data-view="weekly"]:not(.active){background:#fff0f0;color:#a33b50;border-color:#f4d7dd}
+.weekly-phase{border:1px solid #e1e8f2;border-radius:10px;padding:13px;margin:10px 0;background:#fbfcff}.weekly-phase-head{display:flex;align-items:flex-start;gap:10px}.weekly-phase-head input{width:auto;margin-top:4px}.weekly-phase h3{margin:0 0 5px}.weekly-phase p{margin:4px 0 9px}.weekly-phase textarea{min-height:55px}.weekly-progress{height:9px;background:#e8edf5;border-radius:9px;overflow:hidden;margin:10px 0}.weekly-progress>div{height:100%;background:#16804a;width:0;transition:width .2s}.weekly-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.weekly-toolbar button{margin-left:auto}
 .nav button.active{background:#253f8f;color:white;border-color:#253f8f;box-shadow:0 2px 7px #253f8f35}
 .item{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e8edf5;padding:10px 0}
 .item span{overflow-wrap:anywhere}
@@ -148,6 +150,7 @@ h3{font-size:15px;color:#526b99}
 <button data-view="contexts">Contextos</button>
 <button data-view="someday">Algún día</button>
 <button data-view="reference">Referencias</button>
+<button data-view="weekly">Revisión semanal</button>
 </div>
 
 <section id="view-inbox">
@@ -201,6 +204,17 @@ h3{font-size:15px;color:#526b99}
 <section id="view-reference" class="hidden">
 <h2>Material de referencia</h2>
 <div id="referenceTasks"></div>
+</section>
+
+<section id="view-weekly" class="hidden">
+<h2>Revisión semanal</h2>
+<p class="small">Una revisión completa para recuperar el control de tu sistema GTD. Marca cada fase cuando la hayas terminado; los cambios se guardan en tu cuenta.</p>
+<div class="weekly-toolbar"><strong id="weeklyPeriod"></strong><span id="weeklyProgressText" class="small">0 de 7 fases completadas</span></div>
+<div class="weekly-progress"><div id="weeklyProgressBar"></div></div>
+<div id="weeklyPhases"></div>
+<div class="field" style="margin-top:14px"><label for="weeklyNotes">Notas generales de esta revisión</label><textarea id="weeklyNotes" placeholder="Ideas, decisiones o asuntos que quieras recordar..."></textarea></div>
+<div class="weekly-toolbar" style="margin-top:10px"><span id="weeklySaveStatus" class="small" aria-live="polite">Revisión aún no guardada</span><button id="finishWeekly" type="button" class="green">Finalizar revisión</button></div>
+<h3 style="margin-top:22px">Revisiones anteriores</h3><div id="weeklyHistory"></div>
 </section>
 
 <section id="view-projects" class="hidden">
@@ -262,6 +276,18 @@ let contexts = [];
 let realtimeChannel = null;
 let loading = false;
 let currentView = 'inbox';
+let weeklyReview = null;
+let weeklySaveTimer = null;
+let weeklySaving = false;
+const WEEKLY_PHASES = [
+  {id:'collect',title:'1. Recopilar',description:'Vacía la bandeja de entrada. Reúne notas, tareas y compromisos pendientes.'},
+  {id:'process',title:'2. Procesar',description:'Aclara qué significa cada elemento y decide si requiere acción, proyecto, referencia o si puedes descartarlo.'},
+  {id:'projects',title:'3. Revisar proyectos',description:'Comprueba que cada proyecto activo sigue vigente, tiene un resultado claro y una próxima acción definida.'},
+  {id:'actions',title:'4. Revisar próximas acciones',description:'Repasa las acciones activas, programadas y en espera. Actualiza estados y desbloquea lo que corresponda.'},
+  {id:'agenda',title:'5. Revisar agenda',description:'Mira los compromisos pasados y los próximos días. Detecta seguimientos y preparativos necesarios.'},
+  {id:'someday',title:'6. Revisar algún día / tal vez',description:'Decide qué ideas siguen teniendo sentido, cuáles pasan a proyectos o acciones y cuáles puedes eliminar.'},
+  {id:'creative',title:'7. Ser creativo',description:'Piensa en nuevas posibilidades, mejoras, objetivos e ideas que quieras capturar.'}
+];
 
 let agendaMode = 'week';
 let agendaDate = new Date();
@@ -382,6 +408,88 @@ async function loadAll() {
     loading = false;
   }
 }
+
+function dateOnlyLocal(date) {
+  const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,'0'), d=String(date.getDate()).padStart(2,'0');
+  return `${y}-${m}-${d}`;
+}
+function mondayOf(date) {
+  const d=new Date(date.getFullYear(),date.getMonth(),date.getDate());
+  d.setDate(d.getDate() - ((d.getDay()+6)%7));
+  return d;
+}
+function weeklyDefaults() {
+  return Object.fromEntries(WEEKLY_PHASES.map(p=>[p.id,{done:false,note:''}]));
+}
+function weeklyPhaseData() {
+  const stored=weeklyReview?.phases || {};
+  return Object.fromEntries(WEEKLY_PHASES.map(p=>[p.id,{done:!!stored[p.id]?.done,note:stored[p.id]?.note || ''}]));
+}
+async function loadWeeklyReview() {
+  if(!workspaceId || !currentUser) return;
+  const weekStart=dateOnlyLocal(mondayOf(new Date()));
+  $('weeklyPeriod').textContent='Semana del '+mondayOf(new Date()).toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});
+  const {data,error}=await supabase.from('weekly_reviews').select('*').eq('workspace_id',workspaceId).eq('user_id',currentUser.id).eq('week_start',weekStart).order('created_at',{ascending:false}).limit(1).maybeSingle();
+  if(error){$('weeklySaveStatus').textContent='No se pudo cargar la revisión: '+error.message;return;}
+  weeklyReview=data || null;
+  $('weeklyNotes').value=weeklyReview?.notes || '';
+  renderWeeklyPhases();
+  await loadWeeklyHistory();
+}
+function renderWeeklyPhases() {
+  const root=$('weeklyPhases'); if(!root)return;
+  const data=weeklyPhaseData();
+  root.innerHTML='';
+  WEEKLY_PHASES.forEach(phase=>{
+    const item=data[phase.id], article=document.createElement('article'); article.className='weekly-phase';
+    const head=document.createElement('div');head.className='weekly-phase-head';
+    const check=document.createElement('input');check.type='checkbox';check.checked=item.done;check.setAttribute('aria-label','Marcar '+phase.title+' como completada');
+    const body=document.createElement('div');body.style.flex='1';
+    const title=document.createElement('h3');title.textContent=phase.title;
+    const desc=document.createElement('p');desc.className='small';desc.textContent=phase.description;
+    const note=document.createElement('textarea');note.placeholder='Anotaciones de esta fase (opcional)';note.value=item.note;note.setAttribute('aria-label','Notas: '+phase.title);
+    check.addEventListener('change',()=>{data[phase.id].done=check.checked;saveWeeklyChanges(data);updateWeeklyProgress(data);});
+    note.addEventListener('input',()=>{data[phase.id].note=note.value;scheduleWeeklySave(data);});
+    body.append(title,desc,note);head.append(check,body);article.append(head);root.append(article);
+  });
+  updateWeeklyProgress(data);
+}
+function updateWeeklyProgress(data=weeklyPhaseData()) {
+  const done=WEEKLY_PHASES.filter(p=>data[p.id]?.done).length;
+  $('weeklyProgressText').textContent=`${done} de 7 fases completadas`;
+  $('weeklyProgressBar').style.width=(done/7*100)+'%';
+  $('finishWeekly').disabled=done!==7;
+}
+function scheduleWeeklySave(data) {
+  $('weeklySaveStatus').textContent='Cambios pendientes de guardar…';
+  clearTimeout(weeklySaveTimer);
+  weeklySaveTimer=setTimeout(()=>saveWeeklyChanges(data),700);
+}
+async function saveWeeklyChanges(data=weeklyPhaseData(), completed=false) {
+  if(!workspaceId || !currentUser || weeklySaving)return;
+  weeklySaving=true; $('weeklySaveStatus').textContent='Guardando…';
+  const weekStart=dateOnlyLocal(mondayOf(new Date()));
+  const payload={workspace_id:workspaceId,user_id:currentUser.id,week_start:weekStart,notes:$('weeklyNotes').value,phases:data,completed_at:completed?new Date().toISOString():null};
+  try {
+    let result;
+    if(weeklyReview?.id) result=await supabase.from('weekly_reviews').update(payload).eq('id',weeklyReview.id).eq('workspace_id',workspaceId).select().single();
+    else result=await supabase.from('weekly_reviews').insert(payload).select().single();
+    if(result.error)throw result.error;
+    weeklyReview=result.data;
+    $('weeklySaveStatus').textContent=completed?'Revisión semanal finalizada y guardada.':'Guardado en Supabase · '+new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    await loadWeeklyHistory();
+  } catch(error) {$('weeklySaveStatus').textContent='Error al guardar: '+error.message;}
+  finally {weeklySaving=false;}
+}
+async function loadWeeklyHistory() {
+  const {data,error}=await supabase.from('weekly_reviews').select('id,week_start,completed_at,created_at').eq('workspace_id',workspaceId).eq('user_id',currentUser.id).order('week_start',{ascending:false}).limit(12);
+  const root=$('weeklyHistory');root.innerHTML='';
+  if(error){root.textContent='No se pudo cargar el historial.';return;}
+  if(!data?.length){root.innerHTML='<p class="small">Todavía no hay revisiones anteriores.</p>';return;}
+  data.forEach(row=>{const div=document.createElement('div');div.className='item';const label=document.createElement('span');label.textContent='Semana del '+new Date(row.week_start+'T12:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});const status=document.createElement('span');status.className='small';status.textContent=row.completed_at?'Completada':'En curso';div.append(label,status);root.append(div);});
+}
+$('weeklyNotes').addEventListener('input',()=>scheduleWeeklySave(weeklyPhaseData()));
+$('finishWeekly').addEventListener('click',()=>saveWeeklyChanges(weeklyPhaseData(),true));
 
 function renderAll() {
   renderTasks('inboxTasks', tasks.filter(t =>
@@ -1172,7 +1280,8 @@ document.querySelectorAll('[data-view]').forEach(button => {
       'areas',
       'contexts',
       'someday',
-      'reference'
+      'reference',
+      'weekly'
     ].forEach(view => {
       $('view-' + view).classList.toggle(
         'hidden',
@@ -1182,6 +1291,7 @@ document.querySelectorAll('[data-view]').forEach(button => {
 
     if (currentView === 'agenda') renderAgenda();
     if (currentView === 'history') renderHistory();
+    if (currentView === 'weekly') loadWeeklyReview();
   });
 });
 
