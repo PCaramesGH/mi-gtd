@@ -71,7 +71,7 @@ form input{flex:1}
 .nav button[data-view="someday"]:not(.active){background:#e9f7fb;color:#176b83;border-color:#d1edf4}
 .nav button[data-view="reference"]:not(.active){background:#f1f2f4;color:#596273;border-color:#e0e3e8}
 .nav button[data-view="weekly"]:not(.active){background:#fff0f0;color:#a33b50;border-color:#f4d7dd}
-.weekly-phase{border:1px solid #e1e8f2;border-radius:10px;padding:13px;margin:10px 0;background:#fbfcff}.weekly-phase-head{display:flex;align-items:flex-start;gap:10px}.weekly-phase-head input{width:auto;margin-top:4px}.weekly-phase h3{margin:0 0 5px}.weekly-phase p{margin:4px 0 9px}.weekly-phase textarea{min-height:55px}.weekly-progress{height:9px;background:#e8edf5;border-radius:9px;overflow:hidden;margin:10px 0}.weekly-progress>div{height:100%;background:#16804a;width:0;transition:width .2s}.weekly-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.weekly-toolbar button{margin-left:auto}
+.weekly-phase{border:1px solid #e1e8f2;border-radius:10px;padding:13px;margin:10px 0;background:#fbfcff}.weekly-phase-head{display:flex;align-items:flex-start;gap:10px}.weekly-phase-head input{width:auto;margin-top:4px}.weekly-phase h3{margin:0 0 5px}.weekly-count{display:inline-flex;align-items:center;margin-left:8px;padding:2px 8px;border-radius:999px;background:#eaf1ff;color:#3157a4;font-size:11px;font-weight:700;white-space:nowrap}.weekly-count.zero{background:#edf7ef;color:#267044}.weekly-count.warn{background:#fff2df;color:#965b0b}.weekly-count.muted{background:#eef1f5;color:#596273}.weekly-phase-title{display:flex;align-items:center;flex-wrap:wrap;gap:3px}.weekly-phase p{margin:4px 0 9px}.weekly-phase textarea{min-height:55px}.weekly-progress{height:9px;background:#e8edf5;border-radius:9px;overflow:hidden;margin:10px 0}.weekly-progress>div{height:100%;background:#16804a;width:0;transition:width .2s}.weekly-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.weekly-toolbar button{margin-left:auto}
 .nav button.active{background:#253f8f;color:white;border-color:#253f8f;box-shadow:0 2px 7px #253f8f35}
 .item{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e8edf5;padding:10px 0}
 .item span{overflow-wrap:anywhere}
@@ -401,6 +401,7 @@ async function loadAll() {
     contexts = results[3].data || [];
 
     renderAll();
+    if (currentView === 'weekly') renderWeeklyPhases();
 
   } catch (error) {
     errorMessage(error);
@@ -436,6 +437,28 @@ async function loadWeeklyReview() {
   renderWeeklyPhases();
   await loadWeeklyHistory();
 }
+function getWeeklyCounts() {
+  const inbox = tasks.filter(t => t.status === 'inbox').length;
+  const someday = tasks.filter(t => t.kind === 'someday_maybe' && !['completed','archived'].includes(t.status)).length;
+  const activeProjects = projects.filter(p => p.status === 'active');
+  const actionable = tasks.filter(t => t.kind === 'action' && ['active','scheduled','waiting'].includes(t.status));
+  const projectsWithoutNext = activeProjects.filter(p => !actionable.some(t => t.project_id === p.id)).length;
+  const today = startOfDay(new Date());
+  const horizon = new Date(today); horizon.setDate(horizon.getDate()+7);
+  const openTasks = tasks.filter(t => !['completed','archived'].includes(t.status));
+  const overdue = openTasks.filter(t => { const d=parseLocalDate(t.due_at); return d && d<today; }).length;
+  const nextSevenDays = openTasks.filter(t => [t.available_from,t.due_at].some(v=>{const d=parseLocalDate(v);return d && d>=today && d<horizon;})).length;
+  return {
+    collect:{label:`${inbox} en bandeja`,tone:inbox?'warn':'zero'},
+    process:{label:`${inbox} por procesar`,tone:inbox?'warn':'zero'},
+    projects:{label:`${activeProjects.length} activos · ${projectsWithoutNext} sin próxima acción`,tone:projectsWithoutNext?'warn':'muted'},
+    actions:{label:`${actionable.length} próximas acciones`,tone:actionable.length?'muted':'zero'},
+    agenda:{label:`${overdue} vencidas · ${nextSevenDays} en 7 días`,tone:overdue?'warn':'muted'},
+    someday:{label:`${someday} ideas`,tone:someday?'muted':'zero'},
+    creative:{label:'Captura libre',tone:'muted'}
+  };
+}
+
 function renderWeeklyPhases() {
   const root=$('weeklyPhases'); if(!root)return;
   const data=weeklyPhaseData();
@@ -445,12 +468,16 @@ function renderWeeklyPhases() {
     const head=document.createElement('div');head.className='weekly-phase-head';
     const check=document.createElement('input');check.type='checkbox';check.checked=item.done;check.setAttribute('aria-label','Marcar '+phase.title+' como completada');
     const body=document.createElement('div');body.style.flex='1';
+    const titleWrap=document.createElement('div');titleWrap.className='weekly-phase-title';
     const title=document.createElement('h3');title.textContent=phase.title;
+    const count=getWeeklyCounts()[phase.id];
+    const badge=document.createElement('span');badge.className='weekly-count '+count.tone;badge.textContent=count.label;
+    titleWrap.append(title,badge);
     const desc=document.createElement('p');desc.className='small';desc.textContent=phase.description;
     const note=document.createElement('textarea');note.placeholder='Anotaciones de esta fase (opcional)';note.value=item.note;note.setAttribute('aria-label','Notas: '+phase.title);
     check.addEventListener('change',()=>{data[phase.id].done=check.checked;saveWeeklyChanges(data);updateWeeklyProgress(data);});
     note.addEventListener('input',()=>{data[phase.id].note=note.value;scheduleWeeklySave(data);});
-    body.append(title,desc,note);head.append(check,body);article.append(head);root.append(article);
+    body.append(titleWrap,desc,note);head.append(check,body);article.append(head);root.append(article);
   });
   updateWeeklyProgress(data);
 }
