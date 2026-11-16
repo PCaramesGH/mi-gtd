@@ -103,6 +103,32 @@ h3{font-size:15px;color:#526b99}
  .task-detail-form{grid-template-columns:1fr}
  .task-detail-form .field.full{grid-column:auto}
 }
+
+/* Mejoras de revisión semanal */
+.weekly-overview{border:1px solid #dce5f2;background:#f8faff;border-radius:12px;padding:14px;margin:14px 0}
+.weekly-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-top:10px}
+.weekly-metric{background:#fff;border:1px solid #e4eaf3;border-radius:9px;padding:10px}
+.weekly-metric strong{display:block;font-size:22px;color:#294575}
+.weekly-metric span{font-size:11px;color:#667085}
+.weekly-issues{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:10px}
+.weekly-issue{background:#fff;border:1px solid #e4eaf3;border-radius:9px;padding:10px;font-size:12px}
+.weekly-issue strong{display:block;margin-bottom:4px;color:#344563}
+.weekly-count{border:0;cursor:pointer;font:inherit}
+.weekly-count:focus-visible{outline:3px solid #9bb8ff;outline-offset:2px}
+.weekly-modal{position:fixed;inset:0;background:#10182899;z-index:1200;display:flex;align-items:center;justify-content:center;padding:14px}
+.weekly-modal-panel{background:#fff;border-radius:14px;width:min(760px,100%);max-height:90vh;overflow:auto;padding:18px;box-shadow:0 16px 50px #10182840}
+.weekly-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:-18px;background:#fff;padding:4px 0 12px;z-index:1}
+.weekly-modal-head h3{margin:0}
+.weekly-modal-item{padding:10px;border-bottom:1px solid #e8edf5}
+.weekly-modal-item strong{display:block;margin-bottom:3px}
+.weekly-modal-item small{color:#667085;display:block;line-height:1.5}
+.weekly-modal-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.weekly-report{border:1px solid #cfe5d5;background:#f7fcf8;border-radius:12px;padding:14px;margin-top:14px}
+.weekly-history-row{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.weekly-history-row button{margin-left:auto}
+.weekly-hint{font-size:12px;color:#667085;margin:7px 0 0}
+@media(max-width:500px){.weekly-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.weekly-modal-panel{padding:14px}}
+
 </style>
 </head>
 
@@ -211,7 +237,9 @@ h3{font-size:15px;color:#526b99}
 <p class="small">Una revisión completa para recuperar el control de tu sistema GTD. Marca cada fase cuando la hayas terminado; los cambios se guardan en tu cuenta.</p>
 <div class="weekly-toolbar"><strong id="weeklyPeriod"></strong><span id="weeklyProgressText" class="small">0 de 7 fases completadas</span></div>
 <div class="weekly-progress"><div id="weeklyProgressBar"></div></div>
+<div id="weeklyOverview" class="weekly-overview"></div>
 <div id="weeklyPhases"></div>
+<div id="weeklyReport" class="weekly-report hidden"></div>
 <div class="field" style="margin-top:14px"><label for="weeklyNotes">Notas generales de esta revisión</label><textarea id="weeklyNotes" placeholder="Ideas, decisiones o asuntos que quieras recordar..."></textarea></div>
 <div class="weekly-toolbar" style="margin-top:10px"><span id="weeklySaveStatus" class="small" aria-live="polite">Revisión aún no guardada</span><button id="finishWeekly" type="button" class="green">Finalizar revisión</button></div>
 <h3 style="margin-top:22px">Revisiones anteriores</h3><div id="weeklyHistory"></div>
@@ -251,6 +279,13 @@ h3{font-size:15px;color:#526b99}
 </div>
 </main>
 
+<div id="weeklyModal" class="weekly-modal hidden" role="dialog" aria-modal="true" aria-labelledby="weeklyModalTitle">
+  <div class="weekly-modal-panel">
+    <div class="weekly-modal-head"><h3 id="weeklyModalTitle">Elementos de revisión</h3><button type="button" id="closeWeeklyModal" class="secondary">Cerrar</button></div>
+    <div id="weeklyModalBody"></div>
+  </div>
+</div>
+
 <div id="taskDetailOverlay" class="task-detail-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="taskDetailHeading"><div class="task-detail-panel"><div class="task-detail-head"><h2 id="taskDetailHeading">Detalles de la tarea</h2><button type="button" id="closeTaskDetail" class="secondary" aria-label="Cerrar">✕</button></div><form id="taskDetailForm"><div class="task-detail-form"><div class="field full"><label for="detailTitle">Título</label><input id="detailTitle" required maxlength="250"></div><div class="field full"><label for="detailNotes">Más detalles / descripción</label><textarea id="detailNotes" placeholder="Describe qué hay que hacer, información útil, enlaces, pasos..."></textarea></div><div class="field"><label for="detailKind">Tipo</label><select id="detailKind"><option value="action">Próxima acción</option><option value="waiting_for">Pendiente de otra persona</option><option value="someday_maybe">Algún día / Tal vez</option><option value="reference">Referencia</option></select></div><div class="field"><label for="detailStatus">Estado</label><select id="detailStatus"><option value="inbox">Bandeja</option><option value="active">Activa</option><option value="scheduled">Programada</option><option value="waiting">En espera</option><option value="completed">Realizada</option><option value="archived">Archivada</option></select></div><div class="field"><label for="detailProject">Proyecto</label><select id="detailProject"></select></div><div class="field"><label for="detailArea">Área</label><select id="detailArea"></select></div><div class="field"><label for="detailContext">Contexto</label><select id="detailContext"></select></div><div class="field"><label for="detailWaiting">Esperando a</label><input id="detailWaiting" placeholder="Persona o elemento del que dependes"></div><div class="field"><label for="detailScheduled">Fecha programada</label><input id="detailScheduled" type="date"></div><div class="field"><label for="detailDue">Fecha límite</label><input id="detailDue" type="date"></div><div class="field full"><label for="detailReminder">Recordarme el (fecha y hora)</label><input id="detailReminder" type="datetime-local"></div></div><div class="task-detail-footer"><button type="button" id="cancelTaskDetail" class="secondary">Cancelar</button><button type="submit">Guardar tarea</button></div></form></div></div>
 <script type="module">
 import { createClient } from
@@ -283,7 +318,7 @@ const WEEKLY_PHASES = [
   {id:'collect',title:'1. Recopilar',description:'Vacía la bandeja de entrada. Reúne notas, tareas y compromisos pendientes.'},
   {id:'process',title:'2. Procesar',description:'Aclara qué significa cada elemento y decide si requiere acción, proyecto, referencia o si puedes descartarlo.'},
   {id:'projects',title:'3. Revisar proyectos',description:'Comprueba que cada proyecto activo sigue vigente, tiene un resultado claro y una próxima acción definida.'},
-  {id:'actions',title:'4. Revisar próximas acciones',description:'Repasa las acciones activas, programadas y en espera. Actualiza estados y desbloquea lo que corresponda.'},
+  {id:'actions',title:'4. Revisar próximas acciones',description:'Repasa las acciones activas y programadas. En las tareas en espera, comprueba a quién esperas, desde cuándo y si debes hacer seguimiento.'},
   {id:'agenda',title:'5. Revisar agenda',description:'Mira los compromisos pasados y los próximos días. Detecta seguimientos y preparativos necesarios.'},
   {id:'someday',title:'6. Revisar algún día / tal vez',description:'Decide qué ideas siguen teniendo sentido, cuáles pasan a proyectos o acciones y cuáles puedes eliminar.'},
   {id:'creative',title:'7. Ser creativo',description:'Piensa en nuevas posibilidades, mejoras, objetivos e ideas que quieras capturar.'}
@@ -437,26 +472,112 @@ async function loadWeeklyReview() {
   renderWeeklyPhases();
   await loadWeeklyHistory();
 }
-function getWeeklyCounts() {
-  const inbox = tasks.filter(t => t.status === 'inbox').length;
-  const someday = tasks.filter(t => t.kind === 'someday_maybe' && !['completed','archived'].includes(t.status)).length;
-  const activeProjects = projects.filter(p => p.status === 'active');
-  const actionable = tasks.filter(t => t.kind === 'action' && ['active','scheduled','waiting'].includes(t.status));
-  const projectsWithoutNext = activeProjects.filter(p => !actionable.some(t => t.project_id === p.id)).length;
+function weeklyOpenTasks() {
+  return tasks.filter(t => !['completed','archived'].includes(t.status));
+}
+function weeklyProjectDiagnostics() {
+  const active = projects.filter(p => p.status === 'active');
+  const nextActions = tasks.filter(t => t.kind === 'action' && ['active','scheduled'].includes(t.status));
+  const withoutNext = active.filter(p => !nextActions.some(t => t.project_id === p.id));
+  const stale = active.filter(p => {
+    const related = tasks.filter(t => t.project_id === p.id);
+    const stamps = [p.updated_at,p.created_at,...related.flatMap(t => [t.updated_at,t.created_at])].filter(Boolean).map(v => new Date(v).getTime()).filter(Number.isFinite);
+    if (!stamps.length) return false;
+    return (Date.now() - Math.max(...stamps)) > 30*86400000;
+  });
+  return {active,withoutNext,stale};
+}
+function getWeeklyData() {
   const today = startOfDay(new Date());
   const horizon = new Date(today); horizon.setDate(horizon.getDate()+7);
-  const openTasks = tasks.filter(t => !['completed','archived'].includes(t.status));
-  const overdue = openTasks.filter(t => { const d=parseLocalDate(t.due_at); return d && d<today; }).length;
-  const nextSevenDays = openTasks.filter(t => [t.available_from,t.due_at].some(v=>{const d=parseLocalDate(v);return d && d>=today && d<horizon;})).length;
+  const open = weeklyOpenTasks();
+  const inbox = tasks.filter(t => t.status === 'inbox');
+  const someday = tasks.filter(t => t.kind === 'someday_maybe' && !['completed','archived'].includes(t.status));
+  const waiting = open.filter(t => t.status === 'waiting');
+  const actionable = open.filter(t => t.kind === 'action' && ['active','scheduled','waiting'].includes(t.status));
+  const overdue = open.filter(t => {const d=parseLocalDate(t.due_at);return d && d<today;});
+  const inSeven = open.filter(t => [t.available_from,t.due_at].some(v=>{const d=parseLocalDate(v);return d && d>=today && d<horizon;}));
+  const later = open.filter(t => [t.available_from,t.due_at].some(v=>{const d=parseLocalDate(v);return d && d>=horizon;}));
+  const oldSomeday = someday.filter(t => t.created_at && (Date.now()-new Date(t.created_at).getTime())>90*86400000);
+  const projectInfo = weeklyProjectDiagnostics();
+  return {today, inbox, someday, waiting, actionable, overdue, inSeven, later, oldSomeday, projectInfo, open};
+}
+function getWeeklyCounts() {
+  const d=getWeeklyData();
   return {
-    collect:{label:`${inbox} en bandeja`,tone:inbox?'warn':'zero'},
-    process:{label:`${inbox} por procesar`,tone:inbox?'warn':'zero'},
-    projects:{label:`${activeProjects.length} activos · ${projectsWithoutNext} sin próxima acción`,tone:projectsWithoutNext?'warn':'muted'},
-    actions:{label:`${actionable.length} próximas acciones`,tone:actionable.length?'muted':'zero'},
-    agenda:{label:`${overdue} vencidas · ${nextSevenDays} en 7 días`,tone:overdue?'warn':'muted'},
-    someday:{label:`${someday} ideas`,tone:someday?'muted':'zero'},
-    creative:{label:'Captura libre',tone:'muted'}
+    collect:{label:`${d.inbox.length} en bandeja`,tone:d.inbox.length?'warn':'zero',key:'inbox'},
+    process:{label:`${d.inbox.length} por procesar`,tone:d.inbox.length?'warn':'zero',key:'inbox'},
+    projects:{label:`${d.projectInfo.active.length} activos · ${d.projectInfo.withoutNext.length} sin próxima acción`,tone:d.projectInfo.withoutNext.length?'warn':'muted',key:'projects'},
+    actions:{label:`${d.actionable.length} próximas acciones · ${d.waiting.length} en espera`,tone:d.waiting.length?'warn':'muted',key:'actions'},
+    agenda:{label:`${d.overdue.length} vencidas · ${d.inSeven.length} en 7 días · ${d.later.length} posteriores`,tone:d.overdue.length?'warn':'muted',key:'agenda'},
+    someday:{label:`${d.someday.length} ideas · ${d.oldSomeday.length} antiguas`,tone:d.oldSomeday.length?'warn':(d.someday.length?'muted':'zero'),key:'someday'},
+    creative:{label:'Captura libre',tone:'muted',key:'creative'}
   };
+}
+function renderWeeklyOverview() {
+  const root=$('weeklyOverview'); if(!root)return;
+  const d=getWeeklyData();
+  const metrics=[
+    ['Bandeja',d.inbox.length],['Vencidas',d.overdue.length],['Proyectos activos',d.projectInfo.active.length],
+    ['Sin próxima acción',d.projectInfo.withoutNext.length],['En espera',d.waiting.length],['Ideas antiguas',d.oldSomeday.length]
+  ];
+  root.innerHTML='<strong>Diagnóstico del sistema</strong><p class="weekly-hint">Indicadores calculados con tus tareas y proyectos actuales. Pulsa los contadores de cada fase para revisar los elementos.</p>';
+  const grid=document.createElement('div');grid.className='weekly-metrics';
+  metrics.forEach(([label,value])=>{const box=document.createElement('div');box.className='weekly-metric';const n=document.createElement('strong');n.textContent=value;const l=document.createElement('span');l.textContent=label;box.append(n,l);grid.append(box);});
+  root.append(grid);
+  const issues=document.createElement('div');issues.className='weekly-issues';
+  const cards=[
+    ['Proyectos sin próxima acción',d.projectInfo.withoutNext.length,'Revisa el siguiente paso físico y concreto.'],
+    ['Proyectos sin actividad reciente',d.projectInfo.stale.length,'Se consideran inactivos si no hay cambios en 30 días.'],
+    ['Tareas en espera',d.waiting.length,'Comprueba persona, motivo y necesidad de seguimiento.'],
+    ['Elementos antiguos en Algún día',d.oldSomeday.length,'Se consideran antiguos a partir de 90 días desde su creación.']
+  ];
+  cards.forEach(([title,count,desc],i)=>{const c=document.createElement('div');c.className='weekly-issue';const b=document.createElement('strong');b.textContent=title+' · '+count;const t=document.createElement('span');t.textContent=desc;c.append(b,t);const btn=document.createElement('button');btn.type='button';btn.className='secondary';btn.style.marginTop='8px';btn.textContent='Revisar';btn.onclick=()=>openWeeklyModal(['projects','stale','waiting','oldSomeday'][i]);c.append(btn);issues.append(c);});
+  root.append(issues);
+}
+function weeklyItemsFor(key) {
+  const d=getWeeklyData();
+  if(key==='inbox')return {title:'Tareas de la bandeja',items:d.inbox,kind:'tasks'};
+  if(key==='projects')return {title:'Proyectos que necesitan revisión',items:[...d.projectInfo.withoutNext.map(p=>({project:p,reason:'Sin próxima acción'})),...d.projectInfo.stale.filter(p=>!d.projectInfo.withoutNext.some(x=>x.id===p.id)).map(p=>({project:p,reason:'Sin actividad en más de 30 días'}))],kind:'projects'};
+  if(key==='actions')return {title:'Próximas acciones',items:d.actionable,kind:'tasks'};
+  if(key==='waiting')return {title:'Tareas en espera',items:d.waiting,kind:'tasks'};
+  if(key==='agenda')return {title:'Agenda: vencidas, próximos siete días y posteriores',items:[...d.overdue,...d.inSeven,...d.later].filter((t,i,a)=>a.findIndex(x=>x.id===t.id)===i),kind:'tasks'};
+  if(key==='someday')return {title:'Algún día / Tal vez',items:d.someday,kind:'tasks'};
+  if(key==='oldSomeday')return {title:'Ideas antiguas (más de 90 días)',items:d.oldSomeday,kind:'tasks'};
+  if(key==='stale')return {title:'Proyectos sin actividad reciente',items:d.projectInfo.stale.map(p=>({project:p,reason:'Sin actividad en más de 30 días'})),kind:'projects'};
+  return {title:'Revisión',items:[],kind:'tasks'};
+}
+function openWeeklyModal(key) {
+  const result=weeklyItemsFor(key);$('weeklyModalTitle').textContent=result.title;
+  const body=$('weeklyModalBody');body.innerHTML='';
+  if(!result.items.length){body.textContent='No hay elementos que requieran atención en esta categoría.';}
+  result.items.forEach(item=>{
+    const wrap=document.createElement('div');wrap.className='weekly-modal-item';
+    if(result.kind==='projects'){
+      const p=item.project || item;const title=document.createElement('strong');title.textContent=p.name;
+      const info=document.createElement('small');info.textContent=item.reason || 'Proyecto activo';wrap.append(title,info);
+      const acts=document.createElement('div');acts.className='weekly-modal-actions';const go=document.createElement('button');go.type='button';go.textContent='Ver proyectos';go.onclick=()=>{closeWeeklyModal();document.querySelector('[data-view="projects"]').click();};acts.append(go);wrap.append(acts);
+    } else {
+      const title=document.createElement('strong');title.textContent=item.title || 'Tarea sin título';
+      const details=document.createElement('small');const project=projects.find(p=>p.id===item.project_id);details.textContent=[item.status==='waiting'?'En espera':'Estado: '+item.status,item.waiting_for?'Esperando a: '+item.waiting_for:'',item.status==='waiting'?'En espera desde: '+new Date(item.updated_at||item.created_at||Date.now()).toLocaleDateString('es-ES'):'',project?'Proyecto: '+project.name:'',item.due_at?'Vence: '+String(item.due_at).slice(0,10):'',item.available_from?'Disponible: '+String(item.available_from).slice(0,10):''].filter(Boolean).join(' · ');
+      const acts=document.createElement('div');acts.className='weekly-modal-actions';const edit=document.createElement('button');edit.type='button';edit.textContent='Abrir tarea';edit.onclick=()=>{closeWeeklyModal();openTaskDetails(item.id);};acts.append(edit);wrap.append(title,details,acts);
+    }
+    body.append(wrap);
+  });
+  $('weeklyModal').classList.remove('hidden');
+}
+function closeWeeklyModal(){$('weeklyModal').classList.add('hidden');}
+$('closeWeeklyModal').addEventListener('click',closeWeeklyModal);
+$('weeklyModal').addEventListener('click',e=>{if(e.target===$('weeklyModal'))closeWeeklyModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('weeklyModal').classList.contains('hidden'))closeWeeklyModal();});
+function renderWeeklyReport() {
+  const root=$('weeklyReport');if(!root)return;if(!weeklyReview?.completed_at){root.classList.add('hidden');return;}
+  const d=weeklyReview.phases?._summary;
+  root.classList.remove('hidden');root.innerHTML='<strong>Revisión finalizada</strong><p class="weekly-hint">Resumen del estado del sistema en el momento de cerrar esta revisión.</p>';
+  if(!d){const p=document.createElement('p');p.className='small';p.textContent='Esta revisión se completó antes de activar el informe con indicadores históricos.';root.append(p);return;}
+  const grid=document.createElement('div');grid.className='weekly-metrics';
+  [['Bandeja',d.inbox],['Vencidas',d.overdue],['Proyectos activos',d.activeProjects],['Sin próxima acción',d.projectsWithoutNext],['En espera',d.waiting],['Algún día / Tal vez',d.someday]].forEach(([label,value])=>{const box=document.createElement('div');box.className='weekly-metric';const n=document.createElement('strong');n.textContent=Number(value)||0;const l=document.createElement('span');l.textContent=label;box.append(n,l);grid.append(box);});
+  root.append(grid);
 }
 
 function renderWeeklyPhases() {
@@ -471,14 +592,18 @@ function renderWeeklyPhases() {
     const titleWrap=document.createElement('div');titleWrap.className='weekly-phase-title';
     const title=document.createElement('h3');title.textContent=phase.title;
     const count=getWeeklyCounts()[phase.id];
-    const badge=document.createElement('span');badge.className='weekly-count '+count.tone;badge.textContent=count.label;
+    const badge=document.createElement('button');badge.type='button';badge.className='weekly-count '+count.tone;badge.textContent=count.label;badge.title=count.key==='creative'?'Indicador informativo':'Pulsa para revisar estos elementos';badge.disabled=count.key==='creative';if(count.key!=='creative')badge.addEventListener('click',()=>openWeeklyModal(count.key));
     titleWrap.append(title,badge);
+    if(phase.id==='actions'){const waitingBtn=document.createElement('button');waitingBtn.type='button';waitingBtn.className='weekly-count warn';waitingBtn.textContent=getWeeklyData().waiting.length+' en espera · revisar';waitingBtn.title='Revisar personas y seguimientos pendientes';waitingBtn.addEventListener('click',()=>openWeeklyModal('waiting'));titleWrap.append(waitingBtn);}
+    if(phase.id==='someday'){const oldBtn=document.createElement('button');oldBtn.type='button';oldBtn.className='weekly-count warn';oldBtn.textContent=getWeeklyData().oldSomeday.length+' antiguas · revisar';oldBtn.title='Revisar ideas con más de 90 días';oldBtn.addEventListener('click',()=>openWeeklyModal('oldSomeday'));titleWrap.append(oldBtn);}
     const desc=document.createElement('p');desc.className='small';desc.textContent=phase.description;
     const note=document.createElement('textarea');note.placeholder='Anotaciones de esta fase (opcional)';note.value=item.note;note.setAttribute('aria-label','Notas: '+phase.title);
     check.addEventListener('change',()=>{data[phase.id].done=check.checked;saveWeeklyChanges(data);updateWeeklyProgress(data);});
     note.addEventListener('input',()=>{data[phase.id].note=note.value;scheduleWeeklySave(data);});
     body.append(titleWrap,desc,note);head.append(check,body);article.append(head);root.append(article);
   });
+  renderWeeklyOverview();
+  renderWeeklyReport();
   updateWeeklyProgress(data);
 }
 function updateWeeklyProgress(data=weeklyPhaseData()) {
@@ -496,24 +621,29 @@ async function saveWeeklyChanges(data=weeklyPhaseData(), completed=false) {
   if(!workspaceId || !currentUser || weeklySaving)return;
   weeklySaving=true; $('weeklySaveStatus').textContent='Guardando…';
   const weekStart=dateOnlyLocal(mondayOf(new Date()));
-  const payload={workspace_id:workspaceId,user_id:currentUser.id,week_start:weekStart,notes:$('weeklyNotes').value,phases:data,completed_at:completed?new Date().toISOString():null};
+  const snapshot=getWeeklyData();
+  const phasesPayload={...data,...(completed?{_summary:{inbox:snapshot.inbox.length,overdue:snapshot.overdue.length,activeProjects:snapshot.projectInfo.active.length,projectsWithoutNext:snapshot.projectInfo.withoutNext.length,waiting:snapshot.waiting.length,someday:snapshot.someday.length,captured_at:new Date().toISOString()}}:(weeklyReview?.phases?._summary?{_summary:weeklyReview.phases._summary}:{}))};
+  const payload={workspace_id:workspaceId,user_id:currentUser.id,week_start:weekStart,notes:$('weeklyNotes').value,phases:phasesPayload,completed_at:completed?new Date().toISOString():(WEEKLY_PHASES.every(p=>data[p.id]?.done)?(weeklyReview?.completed_at || null):null)};
   try {
     let result;
     if(weeklyReview?.id) result=await supabase.from('weekly_reviews').update(payload).eq('id',weeklyReview.id).eq('workspace_id',workspaceId).select().single();
     else result=await supabase.from('weekly_reviews').insert(payload).select().single();
     if(result.error)throw result.error;
     weeklyReview=result.data;
+    renderWeeklyReport();
     $('weeklySaveStatus').textContent=completed?'Revisión semanal finalizada y guardada.':'Guardado en Supabase · '+new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
     await loadWeeklyHistory();
   } catch(error) {$('weeklySaveStatus').textContent='Error al guardar: '+error.message;}
   finally {weeklySaving=false;}
 }
 async function loadWeeklyHistory() {
-  const {data,error}=await supabase.from('weekly_reviews').select('id,week_start,completed_at,created_at').eq('workspace_id',workspaceId).eq('user_id',currentUser.id).order('week_start',{ascending:false}).limit(12);
+  const {data,error}=await supabase.from('weekly_reviews').select('id,week_start,completed_at,created_at,phases').eq('workspace_id',workspaceId).eq('user_id',currentUser.id).order('week_start',{ascending:false}).limit(12);
   const root=$('weeklyHistory');root.innerHTML='';
   if(error){root.textContent='No se pudo cargar el historial.';return;}
   if(!data?.length){root.innerHTML='<p class="small">Todavía no hay revisiones anteriores.</p>';return;}
-  data.forEach(row=>{const div=document.createElement('div');div.className='item';const label=document.createElement('span');label.textContent='Semana del '+new Date(row.week_start+'T12:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});const status=document.createElement('span');status.className='small';status.textContent=row.completed_at?'Completada':'En curso';div.append(label,status);root.append(div);});
+  const snapshots=data.filter(r=>r.completed_at && r.phases?._summary).slice(0,2);
+  if(snapshots.length===2){const a=snapshots[0].phases._summary,b=snapshots[1].phases._summary;const delta=(key)=>Number(a[key]||0)-Number(b[key]||0);const compare=document.createElement('div');compare.className='weekly-issue';const heading=document.createElement('strong');heading.textContent='Comparativa con la revisión anterior';const detail=document.createElement('span');detail.textContent='Bandeja: '+(delta('inbox')>0?'+':'')+delta('inbox')+' · Vencidas: '+(delta('overdue')>0?'+':'')+delta('overdue')+' · Proyectos sin próxima acción: '+(delta('projectsWithoutNext')>0?'+':'')+delta('projectsWithoutNext')+' · En espera: '+(delta('waiting')>0?'+':'')+delta('waiting');compare.append(heading,detail);root.append(compare);}
+  data.forEach(row=>{const div=document.createElement('div');div.className='item weekly-history-row';const label=document.createElement('span');label.textContent='Semana del '+new Date(row.week_start+'T12:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});const status=document.createElement('span');status.className='small';const done=WEEKLY_PHASES.filter(p=>row.phases?.[p.id]?.done).length;status.textContent=(row.completed_at?'Completada':'En curso')+' · '+done+'/7 fases';div.append(label,status);if(row.phases?._summary){const summary=document.createElement('small');summary.className='small';summary.textContent='Bandeja: '+row.phases._summary.inbox+' · Vencidas: '+row.phases._summary.overdue+' · Proyectos sin próxima acción: '+row.phases._summary.projectsWithoutNext;div.append(summary);}root.append(div);});
 }
 $('weeklyNotes').addEventListener('input',()=>scheduleWeeklySave(weeklyPhaseData()));
 $('finishWeekly').addEventListener('click',()=>saveWeeklyChanges(weeklyPhaseData(),true));
