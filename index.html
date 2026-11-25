@@ -129,6 +129,7 @@ h3{font-size:15px;color:#526b99}
 .weekly-hint{font-size:12px;color:#667085;margin:7px 0 0}
 @media(max-width:500px){.weekly-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.weekly-modal-panel{padding:14px}}
 
+
 </style>
 </head>
 
@@ -459,7 +460,12 @@ function weeklyDefaults() {
 }
 function weeklyPhaseData() {
   const stored=weeklyReview?.phases || {};
-  return Object.fromEntries(WEEKLY_PHASES.map(p=>[p.id,{done:!!stored[p.id]?.done,note:stored[p.id]?.note || ''}]));
+  return Object.fromEntries(WEEKLY_PHASES.map(p=>[p.id,{
+    ...stored[p.id],
+    done:!!stored[p.id]?.done,
+    note:stored[p.id]?.note || '',
+    ...(p.id==='projects'?{needsDecisionProjectIds:Array.isArray(stored[p.id]?.needsDecisionProjectIds)?stored[p.id].needsDecisionProjectIds:[]}:{})
+  }]));
 }
 async function loadWeeklyReview() {
   if(!workspaceId || !currentUser) return;
@@ -485,7 +491,15 @@ function weeklyProjectDiagnostics() {
     if (!stamps.length) return false;
     return (Date.now() - Math.max(...stamps)) > 30*86400000;
   });
-  return {active,withoutNext,stale};
+  const waitingProjects = active.filter(p => tasks.some(t => t.project_id===p.id && !['completed','archived'].includes(t.status) && (t.status==='waiting' || t.kind==='waiting_for')));
+  const phaseData=weeklyReview?.phases?.projects || {};
+  const needsDecisionProjectIds=Array.isArray(phaseData.needsDecisionProjectIds)?phaseData.needsDecisionProjectIds:[];
+  const needsDecision=active.filter(p=>needsDecisionProjectIds.includes(p.id));
+  const finalizable=active.filter(p=>{
+    const related=tasks.filter(t=>t.project_id===p.id);
+    return related.length>0 && related.every(t=>['completed','archived'].includes(t.status));
+  });
+  return {active,withoutNext,stale,waitingProjects,needsDecision,finalizable,needsDecisionProjectIds};
 }
 function getWeeklyData() {
   const today = startOfDay(new Date());
@@ -527,18 +541,24 @@ function renderWeeklyOverview() {
   root.append(grid);
   const issues=document.createElement('div');issues.className='weekly-issues';
   const cards=[
-    ['Proyectos sin próxima acción',d.projectInfo.withoutNext.length,'Revisa el siguiente paso físico y concreto.'],
-    ['Proyectos sin actividad reciente',d.projectInfo.stale.length,'Se consideran inactivos si no hay cambios en 30 días.'],
-    ['Tareas en espera',d.waiting.length,'Comprueba persona, motivo y necesidad de seguimiento.'],
-    ['Elementos antiguos en Algún día',d.oldSomeday.length,'Se consideran antiguos a partir de 90 días desde su creación.']
+    ['Proyectos sin próxima acción',d.projectInfo.withoutNext.length,'Revisa y define una acción concreta.','projectsWithoutNext'],
+    ['Proyectos estancados',d.projectInfo.stale.length,'Sin actividad durante más de 30 días.','staleProjects'],
+    ['Proyectos en espera / bloqueados',d.projectInfo.waitingProjects.length,'Tienen alguna tarea abierta en espera o pendiente de otra persona.','waitingProjects'],
+    ['Proyectos que necesitan decisión',d.projectInfo.needsDecision.length,'Marca manualmente los que requieren una decisión.','needsDecision'],
+    ['Proyectos finalizables',d.projectInfo.finalizable.length,'Todas sus tareas están completadas o archivadas.','finalizable']
   ];
-  cards.forEach(([title,count,desc],i)=>{const c=document.createElement('div');c.className='weekly-issue';const b=document.createElement('strong');b.textContent=title+' · '+count;const t=document.createElement('span');t.textContent=desc;c.append(b,t);const btn=document.createElement('button');btn.type='button';btn.className='secondary';btn.style.marginTop='8px';btn.textContent='Revisar';btn.onclick=()=>openWeeklyModal(['projects','stale','waiting','oldSomeday'][i]);c.append(btn);issues.append(c);});
+  cards.forEach(([title,count,desc,key])=>{const c=document.createElement('div');c.className='weekly-issue';const b=document.createElement('strong');b.textContent=title+' · '+count;const t=document.createElement('span');t.textContent=desc;c.append(b,t);const btn=document.createElement('button');btn.type='button';btn.className='secondary';btn.style.marginTop='8px';btn.textContent='Revisar';btn.onclick=()=>openWeeklyModal(key);c.append(btn);issues.append(c);});
   root.append(issues);
 }
 function weeklyItemsFor(key) {
   const d=getWeeklyData();
   if(key==='inbox')return {title:'Tareas de la bandeja',items:d.inbox,kind:'tasks'};
   if(key==='projects')return {title:'Proyectos que necesitan revisión',items:[...d.projectInfo.withoutNext.map(p=>({project:p,reason:'Sin próxima acción'})),...d.projectInfo.stale.filter(p=>!d.projectInfo.withoutNext.some(x=>x.id===p.id)).map(p=>({project:p,reason:'Sin actividad en más de 30 días'}))],kind:'projects'};
+  if(key==='projectsWithoutNext')return {title:'Proyectos sin próxima acción',items:d.projectInfo.withoutNext.map(p=>({project:p,reason:'Define una próxima acción concreta'})),kind:'projects'};
+  if(key==='staleProjects')return {title:'Proyectos estancados',items:d.projectInfo.stale.map(p=>({project:p,reason:'Sin actividad durante más de 30 días'})),kind:'projects'};
+  if(key==='waitingProjects')return {title:'Proyectos en espera o bloqueados',items:d.projectInfo.waitingProjects.map(p=>({project:p,reason:'Tiene tareas abiertas en espera / bloqueadas'})),kind:'projects'};
+  if(key==='needsDecision')return {title:'Proyectos que necesitan decisión',items:d.projectInfo.needsDecision.map(p=>({project:p,reason:'Marcado manualmente para decidir'})),kind:'projects',decisionToggle:true};
+  if(key==='finalizable')return {title:'Proyectos finalizables',items:d.projectInfo.finalizable.map(p=>({project:p,reason:'Todas las tareas del proyecto están completadas'})),kind:'projects'};
   if(key==='actions')return {title:'Próximas acciones',items:d.actionable,kind:'tasks'};
   if(key==='waiting')return {title:'Tareas en espera',items:d.waiting,kind:'tasks'};
   if(key==='agenda')return {title:'Agenda: vencidas, próximos siete días y posteriores',items:[...d.overdue,...d.inSeven,...d.later].filter((t,i,a)=>a.findIndex(x=>x.id===t.id)===i),kind:'tasks'};
@@ -556,7 +576,19 @@ function openWeeklyModal(key) {
     if(result.kind==='projects'){
       const p=item.project || item;const title=document.createElement('strong');title.textContent=p.name;
       const info=document.createElement('small');info.textContent=item.reason || 'Proyecto activo';wrap.append(title,info);
-      const acts=document.createElement('div');acts.className='weekly-modal-actions';const go=document.createElement('button');go.type='button';go.textContent='Ver proyectos';go.onclick=()=>{closeWeeklyModal();document.querySelector('[data-view="projects"]').click();};acts.append(go);wrap.append(acts);
+      const acts=document.createElement('div');acts.className='weekly-modal-actions';
+      const go=document.createElement('button');go.type='button';go.textContent='Ver proyectos';go.onclick=()=>{closeWeeklyModal();document.querySelector('[data-view="projects"]').click();};acts.append(go);
+      const decision=document.createElement('button');decision.type='button';decision.className='secondary';
+      const marked=(weeklyReview?.phases?.projects?.needsDecisionProjectIds||[]).includes(p.id);
+      decision.textContent=marked?'Quitar marca de decisión':'Marcar necesita decisión';
+      decision.onclick=async()=>{
+        clearTimeout(weeklySaveTimer);
+        const phaseData=weeklyPhaseData();const ids=new Set(phaseData.projects.needsDecisionProjectIds||[]);
+        if(ids.has(p.id))ids.delete(p.id);else ids.add(p.id);
+        phaseData.projects.needsDecisionProjectIds=[...ids];
+        await saveWeeklyChanges(phaseData);renderWeeklyPhases();openWeeklyModal(key);
+      };
+      acts.append(decision);wrap.append(acts);
     } else {
       const title=document.createElement('strong');title.textContent=item.title || 'Tarea sin título';
       const details=document.createElement('small');const project=projects.find(p=>p.id===item.project_id);details.textContent=[item.status==='waiting'?'En espera':'Estado: '+item.status,item.waiting_for?'Esperando a: '+item.waiting_for:'',item.status==='waiting'?'En espera desde: '+new Date(item.updated_at||item.created_at||Date.now()).toLocaleDateString('es-ES'):'',project?'Proyecto: '+project.name:'',item.due_at?'Vence: '+String(item.due_at).slice(0,10):'',item.available_from?'Disponible: '+String(item.available_from).slice(0,10):''].filter(Boolean).join(' · ');
@@ -618,7 +650,8 @@ function scheduleWeeklySave(data) {
   weeklySaveTimer=setTimeout(()=>saveWeeklyChanges(data),700);
 }
 async function saveWeeklyChanges(data=weeklyPhaseData(), completed=false) {
-  if(!workspaceId || !currentUser || weeklySaving)return;
+  if(!workspaceId || !currentUser)return;
+  if(weeklySaving){await new Promise(resolve=>setTimeout(resolve,50));return saveWeeklyChanges(data,completed);}
   weeklySaving=true; $('weeklySaveStatus').textContent='Guardando…';
   const weekStart=dateOnlyLocal(mondayOf(new Date()));
   const snapshot=getWeeklyData();
