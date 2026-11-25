@@ -115,6 +115,14 @@ h3{font-size:15px;color:#526b99}
 .weekly-issue strong{display:block;margin-bottom:4px;color:#344563}
 .weekly-count{border:0;cursor:pointer;font:inherit}
 .weekly-count:focus-visible{outline:3px solid #9bb8ff;outline-offset:2px}
+.weekly-project-diagnostics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:10px 0 12px}
+.weekly-project-counter{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 5px;border:1px solid #dce5f2;border-radius:9px;background:#fff;color:#294575;cursor:pointer;text-align:center}
+.weekly-project-counter:hover{border-color:#8ba8e8;background:#f5f8ff}
+.weekly-project-counter strong{font-size:20px;line-height:1.1}
+.weekly-project-counter span{font-size:11px;line-height:1.2;font-weight:650;overflow-wrap:anywhere}
+.weekly-project-counter small{font-size:10px;color:#3157d5;text-decoration:underline}
+@media(max-width:620px){.weekly-project-diagnostics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:390px){.weekly-project-diagnostics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .weekly-modal{position:fixed;inset:0;background:#10182899;z-index:1200;display:flex;align-items:center;justify-content:center;padding:14px}
 .weekly-modal-panel{background:#fff;border-radius:14px;width:min(760px,100%);max-height:90vh;overflow:auto;padding:18px;box-shadow:0 16px 50px #10182840}
 .weekly-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:-18px;background:#fff;padding:4px 0 12px;z-index:1}
@@ -539,16 +547,6 @@ function renderWeeklyOverview() {
   const grid=document.createElement('div');grid.className='weekly-metrics';
   metrics.forEach(([label,value])=>{const box=document.createElement('div');box.className='weekly-metric';const n=document.createElement('strong');n.textContent=value;const l=document.createElement('span');l.textContent=label;box.append(n,l);grid.append(box);});
   root.append(grid);
-  const issues=document.createElement('div');issues.className='weekly-issues';
-  const cards=[
-    ['Proyectos sin próxima acción',d.projectInfo.withoutNext.length,'Revisa y define una acción concreta.','projectsWithoutNext'],
-    ['Proyectos estancados',d.projectInfo.stale.length,'Sin actividad durante más de 30 días.','staleProjects'],
-    ['Proyectos en espera / bloqueados',d.projectInfo.waitingProjects.length,'Tienen alguna tarea abierta en espera o pendiente de otra persona.','waitingProjects'],
-    ['Proyectos que necesitan decisión',d.projectInfo.needsDecision.length,'Marca manualmente los que requieren una decisión.','needsDecision'],
-    ['Proyectos finalizables',d.projectInfo.finalizable.length,'Todas sus tareas están completadas o archivadas.','finalizable']
-  ];
-  cards.forEach(([title,count,desc,key])=>{const c=document.createElement('div');c.className='weekly-issue';const b=document.createElement('strong');b.textContent=title+' · '+count;const t=document.createElement('span');t.textContent=desc;c.append(b,t);const btn=document.createElement('button');btn.type='button';btn.className='secondary';btn.style.marginTop='8px';btn.textContent='Revisar';btn.onclick=()=>openWeeklyModal(key);c.append(btn);issues.append(c);});
-  root.append(issues);
 }
 function weeklyItemsFor(key) {
   const d=getWeeklyData();
@@ -629,6 +627,19 @@ function renderWeeklyPhases() {
     if(phase.id==='actions'){const waitingBtn=document.createElement('button');waitingBtn.type='button';waitingBtn.className='weekly-count warn';waitingBtn.textContent=getWeeklyData().waiting.length+' en espera · revisar';waitingBtn.title='Revisar personas y seguimientos pendientes';waitingBtn.addEventListener('click',()=>openWeeklyModal('waiting'));titleWrap.append(waitingBtn);}
     if(phase.id==='someday'){const oldBtn=document.createElement('button');oldBtn.type='button';oldBtn.className='weekly-count warn';oldBtn.textContent=getWeeklyData().oldSomeday.length+' antiguas · revisar';oldBtn.title='Revisar ideas con más de 90 días';oldBtn.addEventListener('click',()=>openWeeklyModal('oldSomeday'));titleWrap.append(oldBtn);}
     const desc=document.createElement('p');desc.className='small';desc.textContent=phase.description;
+    if(phase.id==='projects'){
+      const d=getWeeklyData();
+      const cards=[
+        ['Sin próxima acción',d.projectInfo.withoutNext.length,'projectsWithoutNext','Proyectos activos sin próxima acción'],
+        ['Estancado',d.projectInfo.stale.length,'staleProjects','Sin actividad durante más de 30 días'],
+        ['En espera / bloqueado',d.projectInfo.waitingProjects.length,'waitingProjects','Con tareas abiertas en espera'],
+        ['Necesita decisión',d.projectInfo.needsDecision.length,'needsDecision','Marcados manualmente para decidir'],
+        ['Finalizable',d.projectInfo.finalizable.length,'finalizable','Todas sus tareas completadas o archivadas']
+      ];
+      const diagnostics=document.createElement('div');diagnostics.className='weekly-project-diagnostics';
+      cards.forEach(([label,value,key,help])=>{const btn=document.createElement('button');btn.type='button';btn.className='weekly-project-counter';btn.title=help;btn.setAttribute('aria-label',label+': '+value+'. Revisar');const number=document.createElement('strong');number.textContent=value;const caption=document.createElement('span');caption.textContent=label;const action=document.createElement('small');action.textContent='Revisar';btn.append(number,caption,action);btn.addEventListener('click',()=>openWeeklyModal(key));diagnostics.append(btn);});
+      body.append(diagnostics);
+    }
     const note=document.createElement('textarea');note.placeholder='Anotaciones de esta fase (opcional)';note.value=item.note;note.setAttribute('aria-label','Notas: '+phase.title);
     check.addEventListener('change',()=>{data[phase.id].done=check.checked;saveWeeklyChanges(data);updateWeeklyProgress(data);});
     note.addEventListener('input',()=>{data[phase.id].note=note.value;scheduleWeeklySave(data);});
